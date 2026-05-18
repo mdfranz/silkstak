@@ -315,6 +315,14 @@ impl Renderer {
         self.lines.min(rows.saturating_sub(3))
     }
 
+    pub fn resize(&mut self) {
+        let visible = self.visible_lines();
+        let max_offset = self.buffer.len().saturating_sub(visible);
+        if self.scroll_offset > max_offset {
+            self.scroll_offset = max_offset;
+        }
+    }
+
     pub fn write_line(&mut self, text: &str, color: Color) -> io::Result<()> {
         self.commit_partial();
         let max_width = self.max_line_width();

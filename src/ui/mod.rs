@@ -8,6 +8,8 @@ mod slash;
 mod status;
 mod terminal;
 
+use std::io;
+
 use compact_str::CompactString;
 use crossterm::event;
 use crossterm::event::{KeyCode, KeyModifiers, MouseButton, MouseEventKind};
@@ -98,6 +100,24 @@ fn format_tool_call_summary(name: &str, args: &serde_json::Value) -> String {
     }
 }
 
+fn refresh_display(
+    renderer: &mut Renderer,
+    input: &InputEditor,
+    session: &Session,
+    is_running: bool,
+    loop_label: Option<&str>,
+    prompt_name: Option<&str>,
+    perm_mode: Option<&str>,
+) -> io::Result<()> {
+    renderer.render_viewport()?;
+    let status = StatusLine::render(session, is_running, 0, loop_label, prompt_name, perm_mode);
+    renderer.draw_bottom(&input.buffer, input.cursor, &status, is_running)?;
+    if let Some(ref picker) = input.picker {
+        picker.draw()?;
+    }
+    Ok(())
+}
+
 #[allow(clippy::too_many_arguments)]
 pub async fn run_interactive(
     client: AnyClient,
@@ -144,18 +164,9 @@ pub async fn run_interactive(
     };
 
     render_session(&mut renderer, session, cli, cfg, context)?;
-    renderer.draw_bottom(
-        "",
-        0,
-        &StatusLine::render(
-            session,
-            false,
-            0,
-            None,
-            context.current_prompt_name.as_deref(),
-            perm_mode().as_deref(),
-        ),
-        false,
+    refresh_display(
+        &mut renderer, &input, session, false,
+        None, context.current_prompt_name.as_deref(), perm_mode().as_deref(),
     )?;
 
     let (user_tx, mut user_rx) = mpsc::channel::<UserEvent>(64);
@@ -199,7 +210,9 @@ pub async fn run_interactive(
                     }
                     _ => {}
                 },
-                Ok(event::Event::Resize(_, _)) => {}
+                Ok(event::Event::Resize(cols, rows)) => {
+                    let _ = user_tx_clone.blocking_send(UserEvent::Resize(cols, rows));
+                }
                 Err(_) => break,
                 _ => {}
             }
@@ -210,26 +223,20 @@ pub async fn run_interactive(
         tokio::select! {
             Some(ev) = user_rx.recv() => {
                 match ev {
+                    UserEvent::Resize(cols, rows) => {
+                        let _ = (cols, rows);
+                        renderer.resize();
+                        refresh_display(&mut renderer, &input, session, is_running, loop_label.as_deref(), context.current_prompt_name.as_deref(), perm_mode().as_deref())?;
+                        continue;
+                    }
                     UserEvent::ScrollUp => {
                         renderer.scroll_line_up();
-                        renderer.render_viewport()?;
-                        renderer.draw_bottom(
-                            &input.buffer,
-                            input.cursor,
-                            &StatusLine::render(session, is_running, 0, loop_label.as_deref(), context.current_prompt_name.as_deref(), perm_mode().as_deref()),
-                            is_running,
-                        )?;
+                        refresh_display(&mut renderer, &input, session, is_running, loop_label.as_deref(), context.current_prompt_name.as_deref(), perm_mode().as_deref())?;
                         continue;
                     }
                     UserEvent::ScrollDown => {
                         renderer.scroll_line_down();
-                        renderer.render_viewport()?;
-                        renderer.draw_bottom(
-                            &input.buffer,
-                            input.cursor,
-                            &StatusLine::render(session, is_running, 0, loop_label.as_deref(), context.current_prompt_name.as_deref(), perm_mode().as_deref()),
-                            is_running,
-                        )?;
+                        refresh_display(&mut renderer, &input, session, is_running, loop_label.as_deref(), context.current_prompt_name.as_deref(), perm_mode().as_deref())?;
                         continue;
                     }
                     UserEvent::MouseDown { row, col: _ } => {
@@ -238,12 +245,7 @@ pub async fn run_interactive(
                                 renderer.selection_active = true;
                                 renderer.selection_start = Some(idx);
                                 renderer.selection_end = Some(idx);
-                                renderer.render_viewport()?;
-                                renderer.draw_bottom(
-                                    &input.buffer, input.cursor,
-                                    &StatusLine::render(session, is_running, 0, loop_label.as_deref(), context.current_prompt_name.as_deref(), perm_mode().as_deref()),
-                                    is_running,
-                                )?;
+                                refresh_display(&mut renderer, &input, session, is_running, loop_label.as_deref(), context.current_prompt_name.as_deref(), perm_mode().as_deref())?;
                             }
                         continue;
                     }
@@ -251,12 +253,7 @@ pub async fn run_interactive(
                         if renderer.selection_active
                             && let Some(idx) = renderer.buffer_line_at_row(row) {
                                 renderer.selection_end = Some(idx);
-                                renderer.render_viewport()?;
-                                renderer.draw_bottom(
-                                    &input.buffer, input.cursor,
-                                    &StatusLine::render(session, is_running, 0, loop_label.as_deref(), context.current_prompt_name.as_deref(), perm_mode().as_deref()),
-                                    is_running,
-                                )?;
+                                refresh_display(&mut renderer, &input, session, is_running, loop_label.as_deref(), context.current_prompt_name.as_deref(), perm_mode().as_deref())?;
                             }
                         continue;
                     }
@@ -269,12 +266,7 @@ pub async fn run_interactive(
                                 copy_to_clipboard(&text);
                             }
                             renderer.clear_selection();
-                            renderer.render_viewport()?;
-                            renderer.draw_bottom(
-                                &input.buffer, input.cursor,
-                                &StatusLine::render(session, is_running, 0, loop_label.as_deref(), context.current_prompt_name.as_deref(), perm_mode().as_deref()),
-                                is_running,
-                            )?;
+                            refresh_display(&mut renderer, &input, session, is_running, loop_label.as_deref(), context.current_prompt_name.as_deref(), perm_mode().as_deref())?;
                         }
                         continue;
                     }
@@ -293,12 +285,7 @@ pub async fn run_interactive(
                                     loop_label = None;
                                 }
                                 renderer.write_line("interrupted", C_ERROR)?;
-                                renderer.draw_bottom(
-                                    &input.buffer,
-                                    input.cursor,
-                                    &StatusLine::render(session, is_running, 0, loop_label.as_deref(), context.current_prompt_name.as_deref(), perm_mode().as_deref()),
-                                    is_running,
-                                )?;
+                                refresh_display(&mut renderer, &input, session, is_running, loop_label.as_deref(), context.current_prompt_name.as_deref(), perm_mode().as_deref())?;
                             } else {
                                 break;
                             }
@@ -311,22 +298,12 @@ pub async fn run_interactive(
                                 renderer.write_line("copied selection", Color::Green)?;
                             }
                             renderer.clear_selection();
-                            renderer.render_viewport()?;
-                            renderer.draw_bottom(
-                                &input.buffer, input.cursor,
-                                &StatusLine::render(session, is_running, 0, loop_label.as_deref(), context.current_prompt_name.as_deref(), perm_mode().as_deref()),
-                                is_running,
-                            )?;
+                            refresh_display(&mut renderer, &input, session, is_running, loop_label.as_deref(), context.current_prompt_name.as_deref(), perm_mode().as_deref())?;
                             continue;
                         }
                         if renderer.selection_active && key.code == KeyCode::Esc {
                             renderer.clear_selection();
-                            renderer.render_viewport()?;
-                            renderer.draw_bottom(
-                                &input.buffer, input.cursor,
-                                &StatusLine::render(session, is_running, 0, loop_label.as_deref(), context.current_prompt_name.as_deref(), perm_mode().as_deref()),
-                                is_running,
-                            )?;
+                            refresh_display(&mut renderer, &input, session, is_running, loop_label.as_deref(), context.current_prompt_name.as_deref(), perm_mode().as_deref())?;
                             continue;
                         }
 
@@ -338,57 +315,29 @@ pub async fn run_interactive(
                                 &format!("reasoning visibility: {}", if show_reasoning { "on" } else { "off" }),
                                 Color::White,
                             )?;
-                            renderer.draw_bottom(
-                                &input.buffer,
-                                input.cursor,
-                                &StatusLine::render(session, is_running, 0, loop_label.as_deref(), context.current_prompt_name.as_deref(), perm_mode().as_deref()),
-                                is_running,
-                            )?;
+                            refresh_display(&mut renderer, &input, session, is_running, loop_label.as_deref(), context.current_prompt_name.as_deref(), perm_mode().as_deref())?;
                             continue;
                         }
 
                         match key.code {
                             KeyCode::PageUp => {
                                 renderer.scroll_page_up();
-                                renderer.render_viewport()?;
-                                renderer.draw_bottom(
-                                    &input.buffer,
-                                    input.cursor,
-                                    &StatusLine::render(session, is_running, 0, loop_label.as_deref(), context.current_prompt_name.as_deref(), perm_mode().as_deref()),
-                                    is_running,
-                                )?;
+                                refresh_display(&mut renderer, &input, session, is_running, loop_label.as_deref(), context.current_prompt_name.as_deref(), perm_mode().as_deref())?;
                                 continue;
                             }
                             KeyCode::PageDown => {
                                 renderer.scroll_page_down();
-                                renderer.render_viewport()?;
-                                renderer.draw_bottom(
-                                    &input.buffer,
-                                    input.cursor,
-                                    &StatusLine::render(session, is_running, 0, loop_label.as_deref(), context.current_prompt_name.as_deref(), perm_mode().as_deref()),
-                                    is_running,
-                                )?;
+                                refresh_display(&mut renderer, &input, session, is_running, loop_label.as_deref(), context.current_prompt_name.as_deref(), perm_mode().as_deref())?;
                                 continue;
                             }
                             KeyCode::Home => {
                                 renderer.scroll_to_top();
-                                renderer.render_viewport()?;
-                                renderer.draw_bottom(
-                                    &input.buffer,
-                                    input.cursor,
-                                    &StatusLine::render(session, is_running, 0, loop_label.as_deref(), context.current_prompt_name.as_deref(), perm_mode().as_deref()),
-                                    is_running,
-                                )?;
+                                refresh_display(&mut renderer, &input, session, is_running, loop_label.as_deref(), context.current_prompt_name.as_deref(), perm_mode().as_deref())?;
                                 continue;
                             }
                             KeyCode::End => {
                                 renderer.scroll_to_bottom()?;
-                                renderer.draw_bottom(
-                                    &input.buffer,
-                                    input.cursor,
-                                    &StatusLine::render(session, is_running, 0, loop_label.as_deref(), context.current_prompt_name.as_deref(), perm_mode().as_deref()),
-                                    is_running,
-                                )?;
+                                refresh_display(&mut renderer, &input, session, is_running, loop_label.as_deref(), context.current_prompt_name.as_deref(), perm_mode().as_deref())?;
                                 continue;
                             }
                             _ => {}
@@ -396,15 +345,7 @@ pub async fn run_interactive(
 
                         if input.picker.as_ref().is_some_and(|p| p.active())
                             && input.handle_picker_key(key) {
-                                renderer.render_viewport()?;
-                                renderer.draw_bottom(
-                                    &input.buffer, input.cursor,
-                                    &StatusLine::render(session, is_running, 0, loop_label.as_deref(), context.current_prompt_name.as_deref(), perm_mode().as_deref()),
-                                    is_running,
-                                )?;
-                                if let Some(ref picker) = input.picker {
-                                    picker.draw()?;
-                                }
+                                refresh_display(&mut renderer, &input, session, is_running, loop_label.as_deref(), context.current_prompt_name.as_deref(), perm_mode().as_deref())?;
                                 continue;
                             }
 
@@ -412,12 +353,7 @@ pub async fn run_interactive(
                             #[cfg(feature = "loop")]
                             if loop_state.as_ref().is_some_and(|ls| ls.active) && !text.starts_with('/') {
                                 renderer.write_line("loop active: /loop stop to cancel", C_ERROR)?;
-                                renderer.draw_bottom(
-                                    &input.buffer,
-                                    input.cursor,
-                                    &StatusLine::render(session, is_running, 0, loop_label.as_deref(), context.current_prompt_name.as_deref(), perm_mode().as_deref()),
-                                    is_running,
-                                )?;
+                                refresh_display(&mut renderer, &input, session, is_running, loop_label.as_deref(), context.current_prompt_name.as_deref(), perm_mode().as_deref())?;
                                 continue;
                             }
                             if renderer.is_scrolling() {
@@ -555,15 +491,7 @@ pub async fn run_interactive(
                                 session.add_message(MessageRole::User, &text);
                             }
                         }
-                        renderer.draw_bottom(
-                            &input.buffer,
-                            input.cursor,
-                            &StatusLine::render(session, is_running, 0, loop_label.as_deref(), context.current_prompt_name.as_deref(), perm_mode().as_deref()),
-                            is_running,
-                        )?;
-                        if let Some(ref picker) = input.picker {
-                            picker.draw()?;
-                        }
+                        refresh_display(&mut renderer, &input, session, is_running, loop_label.as_deref(), context.current_prompt_name.as_deref(), perm_mode().as_deref())?;
                     }
                 }
             }
@@ -787,15 +715,7 @@ pub async fn run_interactive(
                         response_start_line = None;
                     }
                 }
-                renderer.draw_bottom(
-                    &input.buffer,
-                    input.cursor,
-                    &StatusLine::render(session, is_running, 0, loop_label.as_deref(), context.current_prompt_name.as_deref(), perm_mode().as_deref()),
-                    is_running,
-                )?;
-                if let Some(ref picker) = input.picker {
-                    picker.draw()?;
-                }
+                refresh_display(&mut renderer, &input, session, is_running, loop_label.as_deref(), context.current_prompt_name.as_deref(), perm_mode().as_deref())?;
             }
             Some(ask_req) = async {
                 if let Some(rx) = &mut ask_rx {
@@ -861,27 +781,10 @@ pub async fn run_interactive(
                     )?;
                 }
 
-                renderer.render_viewport()?;
-                renderer.draw_bottom(
-                    &input.buffer,
-                    input.cursor,
-                    &StatusLine::render(session, is_running, 0, loop_label.as_deref(), context.current_prompt_name.as_deref(), perm_mode().as_deref()),
-                    is_running,
-                )?;
-                if let Some(ref picker) = input.picker {
-                    picker.draw()?;
-                }
+                refresh_display(&mut renderer, &input, session, is_running, loop_label.as_deref(), context.current_prompt_name.as_deref(), perm_mode().as_deref())?;
             }
             _ = tokio::time::sleep(tokio::time::Duration::from_millis(200)), if is_running => {
-                renderer.draw_bottom(
-                    &input.buffer,
-                    input.cursor,
-                    &StatusLine::render(session, is_running, 0, loop_label.as_deref(), context.current_prompt_name.as_deref(), perm_mode().as_deref()),
-                    is_running,
-                )?;
-                if let Some(ref picker) = input.picker {
-                    picker.draw()?;
-                }
+                refresh_display(&mut renderer, &input, session, is_running, loop_label.as_deref(), context.current_prompt_name.as_deref(), perm_mode().as_deref())?;
             }
             else => {
                 tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
