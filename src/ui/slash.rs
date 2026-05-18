@@ -768,7 +768,7 @@ pub async fn handle_slash(
                             &format!("global chat history ({} entries):", entries.len()),
                             C_AGENT,
                         )?;
-                        for entry in entries.iter().rev().take(50).rev() {
+                        for entry in entries.iter().rev().take(10).rev() {
                             let preview: String = entry.content.chars().take(80).collect();
                             renderer.write_line(
                                 &format!(
@@ -778,8 +778,8 @@ pub async fn handle_slash(
                                 C_RESULT,
                             )?;
                         }
-                        if entries.len() > 50 {
-                            renderer.write_line("  ... (showing last 50)", C_AGENT)?;
+                        if entries.len() > 10 {
+                            renderer.write_line("  ... (showing last 10)", C_AGENT)?;
                         }
                     }
                 }
