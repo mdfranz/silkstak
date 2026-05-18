@@ -97,6 +97,7 @@ fn format_tool_call_summary(name: &str, args: &serde_json::Value) -> String {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn run_interactive(
     client: AnyClient,
     mut agent: AnyAgent,

@@ -17,6 +17,7 @@ use crate::sandbox::Sandbox;
 #[allow(dead_code)]
 pub type ZAgent = Agent<openrouter::CompletionModel>;
 
+#[allow(clippy::too_many_arguments)]
 pub async fn build_agent_inner<M: CompletionModel + 'static>(
     model: M,
     cli: &Cli,
