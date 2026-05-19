@@ -12,7 +12,7 @@ use std::io;
 
 use compact_str::CompactString;
 use crossterm::event;
-use crossterm::event::{KeyCode, KeyModifiers, MouseButton, MouseEventKind};
+use crossterm::event::{KeyCode, KeyEventKind, KeyModifiers, MouseButton, MouseEventKind};
 use crossterm::style::Color;
 use tokio::sync::mpsc;
 
@@ -191,7 +191,9 @@ pub async fn run_interactive(
         loop {
             match event::read() {
                 Ok(event::Event::Key(key)) => {
-                    if user_tx_clone.blocking_send(UserEvent::Key(key)).is_err() {
+                    if key.kind == KeyEventKind::Press
+                        && user_tx_clone.blocking_send(UserEvent::Key(key)).is_err()
+                    {
                         break;
                     }
                 }

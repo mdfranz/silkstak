@@ -14,6 +14,7 @@ mod ui;
 mod tests;
 
 use clap::Parser;
+use compact_str::CompactString;
 use session::MessageRole;
 
 use crate::permission::ask::AskSender;

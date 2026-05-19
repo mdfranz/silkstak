@@ -1,3 +1,5 @@
+use std::io::Write;
+
 use compact_str::CompactString;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
