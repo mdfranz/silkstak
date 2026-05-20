@@ -195,7 +195,7 @@ impl InputEditor {
         }
     }
 
-    fn open_in_editor(&mut self) {
+    pub fn open_in_editor(&mut self) {
         let editor = self
             .editor
             .clone()
@@ -280,15 +280,6 @@ impl InputEditor {
                     self.cursor = prev_char_boundary(&self.buffer, self.cursor);
                     self.buffer.remove(self.cursor);
                 }
-                None
-            }
-            KeyCode::Char(c)
-                if c == 'g' && key.modifiers.contains(KeyModifiers::CONTROL) =>
-            {
-                if self.picker.as_ref().is_some_and(|p| p.active()) {
-                    return None;
-                }
-                self.open_in_editor();
                 None
             }
             KeyCode::Char(c) => {

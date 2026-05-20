@@ -9,6 +9,9 @@ mod status;
 mod terminal;
 
 use std::io;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use std::time::Duration;
 
 use compact_str::CompactString;
 use crossterm::event;
@@ -118,6 +121,63 @@ fn refresh_display(
     Ok(())
 }
 
+fn spawn_event_thread(
+    user_tx: mpsc::Sender<UserEvent>,
+    running: Arc<AtomicBool>,
+) -> std::thread::JoinHandle<()> {
+    std::thread::spawn(move || {
+        while running.load(Ordering::Relaxed) {
+            if let Ok(true) = event::poll(Duration::from_millis(50)) {
+                match event::read() {
+                    Ok(event::Event::Key(key)) => {
+                        if key.kind == KeyEventKind::Press
+                            && user_tx.blocking_send(UserEvent::Key(key)).is_err()
+                        {
+                            break;
+                        }
+                    }
+                    Ok(event::Event::Mouse(m)) => match m.kind {
+                        MouseEventKind::ScrollUp => {
+                            if user_tx.blocking_send(UserEvent::ScrollUp).is_err() {
+                                break;
+                            }
+                        }
+                        MouseEventKind::ScrollDown => {
+                            if user_tx.blocking_send(UserEvent::ScrollDown).is_err() {
+                                break;
+                            }
+                        }
+                        MouseEventKind::Down(MouseButton::Left) => {
+                            let _ = user_tx.blocking_send(UserEvent::MouseDown {
+                                row: m.row,
+                                col: m.column,
+                            });
+                        }
+                        MouseEventKind::Drag(MouseButton::Left) => {
+                            let _ = user_tx.blocking_send(UserEvent::MouseDrag {
+                                row: m.row,
+                                col: m.column,
+                            });
+                        }
+                        MouseEventKind::Up(MouseButton::Left) => {
+                            let _ = user_tx.blocking_send(UserEvent::MouseUp {
+                                row: m.row,
+                                col: m.column,
+                            });
+                        }
+                        _ => {}
+                    },
+                    Ok(event::Event::Resize(cols, rows)) => {
+                        let _ = user_tx.blocking_send(UserEvent::Resize(cols, rows));
+                    }
+                    Err(_) => break,
+                    _ => {}
+                }
+            }
+        }
+    })
+}
+
 #[allow(clippy::too_many_arguments)]
 pub async fn run_interactive(
     mut client: AnyClient,
@@ -185,57 +245,9 @@ pub async fn run_interactive(
         perm_mode().as_deref(),
     )?;
 
-    let (user_tx, mut user_rx) = mpsc::channel::<UserEvent>(64);
-    let user_tx_clone = user_tx.clone();
-    std::thread::spawn(move || {
-        loop {
-            match event::read() {
-                Ok(event::Event::Key(key)) => {
-                    if key.kind == KeyEventKind::Press
-                        && user_tx_clone.blocking_send(UserEvent::Key(key)).is_err()
-                    {
-                        break;
-                    }
-                }
-                Ok(event::Event::Mouse(m)) => match m.kind {
-                    MouseEventKind::ScrollUp => {
-                        if user_tx_clone.blocking_send(UserEvent::ScrollUp).is_err() {
-                            break;
-                        }
-                    }
-                    MouseEventKind::ScrollDown => {
-                        if user_tx_clone.blocking_send(UserEvent::ScrollDown).is_err() {
-                            break;
-                        }
-                    }
-                    MouseEventKind::Down(MouseButton::Left) => {
-                        let _ = user_tx_clone.blocking_send(UserEvent::MouseDown {
-                            row: m.row,
-                            col: m.column,
-                        });
-                    }
-                    MouseEventKind::Drag(MouseButton::Left) => {
-                        let _ = user_tx_clone.blocking_send(UserEvent::MouseDrag {
-                            row: m.row,
-                            col: m.column,
-                        });
-                    }
-                    MouseEventKind::Up(MouseButton::Left) => {
-                        let _ = user_tx_clone.blocking_send(UserEvent::MouseUp {
-                            row: m.row,
-                            col: m.column,
-                        });
-                    }
-                    _ => {}
-                },
-                Ok(event::Event::Resize(cols, rows)) => {
-                    let _ = user_tx_clone.blocking_send(UserEvent::Resize(cols, rows));
-                }
-                Err(_) => break,
-                _ => {}
-            }
-        }
-    });
+    let (mut user_tx, mut user_rx) = mpsc::channel::<UserEvent>(64);
+    let mut running = Arc::new(AtomicBool::new(true));
+    let mut event_handle = Some(spawn_event_thread(user_tx.clone(), running.clone()));
 
     loop {
         tokio::select! {
@@ -366,6 +378,21 @@ pub async fn run_interactive(
                                 refresh_display(&mut renderer, &input, session, is_running, loop_label.as_deref(), context.current_prompt_name.as_deref(), perm_mode().as_deref())?;
                                 continue;
                             }
+
+                        if key.code == KeyCode::Char('g') && key.modifiers.contains(KeyModifiers::CONTROL) {
+                            if let Some(h) = event_handle.take() {
+                                running.store(false, Ordering::Relaxed);
+                                let _ = h.join();
+                            }
+                            input.open_in_editor();
+                            running = Arc::new(AtomicBool::new(true));
+                            let (new_tx, new_rx) = mpsc::channel(64);
+                            user_tx = new_tx;
+                            user_rx = new_rx;
+                            event_handle = Some(spawn_event_thread(user_tx.clone(), running.clone()));
+                            refresh_display(&mut renderer, &input, session, is_running, loop_label.as_deref(), context.current_prompt_name.as_deref(), perm_mode().as_deref())?;
+                            continue;
+                        }
 
                         if let Some(text) = input.handle_key(key) {
                             #[cfg(feature = "loop")]
