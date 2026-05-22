@@ -1,11 +1,14 @@
 # Configuration
 
-zerostack reads an optional JSON config file named `config.json` from its data
-folder:
+zerostack reads an optional config file from its data folder. It supports both
+JSON and TOML formats. The file is resolved by priority:
 
-- If `ZS_CONFIG_DIR` is set: `$ZS_CONFIG_DIR/config.json`
-- Otherwise: if `ZS_DATA_DIR` is set: `$ZS_DATA_DIR/config.json`
-- Otherwise: `~/.local/share/zerostack/config.json`
+- If `ZS_CONFIG_DIR` is set: `$ZS_CONFIG_DIR/config.toml` or `$ZS_CONFIG_DIR/config.json`
+- Otherwise: if `ZS_DATA_DIR` is set: `$ZS_DATA_DIR/config.toml` or `$ZS_DATA_DIR/config.json`
+- Otherwise: `~/.local/share/zerostack/config.toml` or `~/.local/share/zerostack/config.json`
+
+TOML is checked first; if `config.toml` does not exist but `config.json` does,
+the JSON file is used. If neither exists, a default `config.toml` is created.
 
 Prompts and themes are loaded from the same data directory:
 
@@ -20,7 +23,7 @@ data files.
 All config keys are optional. CLI flags and their environment-backed values
 (such as `ZS_PROVIDER` and `ZS_MODEL`) take precedence where both exist.
 
-Example:
+Example (JSON):
 
 ```json
 {
@@ -66,6 +69,49 @@ Example:
     "doom_loop": "ask"
   }
 }
+```
+
+The same config in TOML:
+
+```toml
+provider = "openrouter"
+model = "deepseek/deepseek-v4-flash"
+max_tokens = 8192
+temperature = 0.7
+context_window = 128000
+reserve_tokens = 16384
+keep_recent_tokens = 20000
+compact_enabled = true
+default_prompt = "code"
+default_permission_mode = "standard"
+show_tool_details = false
+
+[quick_models.fast]
+provider = "openai"
+model = "gpt-4o-mini"
+
+[custom_providers.local-vllm]
+provider_type = "openai"
+base_url = "http://localhost:8000/v1"
+api_key_env = "VLLM_API_KEY"
+
+[permission]
+"*" = "ask"
+read = "allow"
+
+[permission.write]
+"**/*.rs" = "allow"
+"**" = "ask"
+
+[permission.bash]
+"cargo test" = "allow"
+"rm **" = "deny"
+
+[permission.external_directory]
+"/tmp/**" = "allow"
+"/**" = "ask"
+
+permission.doom_loop = "ask"
 ```
 
 Accepted top-level keys:
@@ -220,3 +266,40 @@ ACP server configs (in `acp_servers`) support two transport types:
 
 When `--acp` is passed without `--acp-host`, zerostack runs in stdio mode
 (the editor spawns it as a subprocess). With `--acp-host`, it listens on TCP.
+
+## TOML configuration
+
+zerostack prefers `config.toml` over `config.json` when both exist. If neither
+file exists, a default `config.toml` is created automatically.
+
+TOML is especially well suited for zerostack's permission rules and structured
+settings. Hyphenated keys such as `permission-allow`, `permission-ask`, and
+`permission-deny` are idiomatic in TOML and avoid deeply nested tables:
+
+```toml
+permission-allow = { read = ["src/**", "tests/**"] }
+permission-ask = { bash = ["rm **"] }
+permission-deny = { write = ["/etc/**", "/usr/**"] }
+```
+
+For more complex configurations, explicit TOML tables provide clear structure:
+
+```toml
+[permission]
+"*" = "ask"
+
+[permission.bash]
+"cargo test" = "allow"
+"rm **" = "deny"
+
+[permission.write]
+"**/*.rs" = "allow"
+"**" = "ask"
+```
+
+### Key naming in TOML
+
+All top-level keys use kebab-case when they contain hyphens (e.g.
+`permission-allow`, `allow-all-mcp-calls`). Simple keys use the same name as
+their JSON counterpart. Quoted keys (`"*"`, `"**"`) are required when the key
+contains special characters like `*` or `/`.
