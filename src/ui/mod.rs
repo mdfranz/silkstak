@@ -3,7 +3,7 @@ mod events;
 pub(crate) mod input;
 mod markdown;
 pub(crate) mod picker;
-mod renderer;
+pub(crate) mod renderer;
 mod slash;
 mod status;
 mod terminal;
@@ -214,10 +214,57 @@ fn spawn_event_thread(
     })
 }
 
+#[cfg(feature = "mcp")]
+async fn ensure_agent(
+    agent: &mut Option<AnyAgent>,
+    client: &AnyClient,
+    session: &Session,
+    cli: &Cli,
+    cfg: &Config,
+    context: &ContextFiles,
+    permission: &Option<PermCheck>,
+    ask_tx: &Option<AskSender>,
+    sandbox: &Sandbox,
+    reasoning_enabled: bool,
+    mcp_manager: Option<&McpClientManager>,
+) {
+    if agent.is_some() {
+        return;
+    }
+    let model = client.completion_model(session.model.to_string());
+    *agent = Some(crate::provider::build_agent(
+        model, cli, cfg, context, permission.clone(), ask_tx.clone(),
+        sandbox.clone(), reasoning_enabled, mcp_manager,
+    ).await);
+}
+
+#[cfg(not(feature = "mcp"))]
+async fn ensure_agent(
+    agent: &mut Option<AnyAgent>,
+    client: &AnyClient,
+    session: &Session,
+    cli: &Cli,
+    cfg: &Config,
+    context: &ContextFiles,
+    permission: &Option<PermCheck>,
+    ask_tx: &Option<AskSender>,
+    sandbox: &Sandbox,
+    reasoning_enabled: bool,
+) {
+    if agent.is_some() {
+        return;
+    }
+    let model = client.completion_model(session.model.to_string());
+    *agent = Some(crate::provider::build_agent(
+        model, cli, cfg, context, permission.clone(), ask_tx.clone(),
+        sandbox.clone(), reasoning_enabled,
+    ).await);
+}
+
 #[allow(clippy::too_many_arguments)]
 pub async fn run_interactive(
     mut client: AnyClient,
-    mut agent: AnyAgent,
+    mut agent: Option<AnyAgent>,
     cli: &Cli,
     cfg: &Config,
     session: &mut Session,
@@ -241,6 +288,7 @@ pub async fn run_interactive(
     let mut input = InputEditor::new();
     input.set_monochrome(cli.no_color);
     input.set_prompt_names(context.prompts.keys().cloned().collect());
+    input.set_theme_names(context.themes.keys().cloned().collect());
     if let Some(editor) = &cfg.editor {
         input.set_editor(editor.clone());
     }
@@ -491,7 +539,12 @@ pub async fn run_interactive(
                                             );
                                             session.add_message(MessageRole::User, &prompt);
                                             let history = crate::agent::runner::convert_history(session);
-                                            let runner = agent.clone().spawn_runner(prompt, history);
+                                            ensure_agent(
+                                                &mut agent, &client, session, cli, cfg, context,
+                                                &permission, &ask_tx, &sandbox, reasoning_enabled,
+                                                #[cfg(feature = "mcp")] mcp_manager,
+                                            ).await;
+                                            let runner = agent.as_ref().unwrap().clone().spawn_runner(prompt, history);
                                             agent_rx = Some(runner.event_rx);
                                             is_running = true;
                                             wt_return_path = Some(main_path);
@@ -508,7 +561,7 @@ pub async fn run_interactive(
                                             session.working_dir = compact_str::CompactString::new(main_path);
                                             context.reload();
                                             let model = client.completion_model(session.model.to_string());
-                                            agent = crate::provider::build_agent(
+                                            agent = Some(crate::provider::build_agent(
                                                 model,
                                                 cli,
                                                 cfg,
@@ -518,7 +571,7 @@ pub async fn run_interactive(
                                                 sandbox.clone(),
                                                 reasoning_enabled,
                                                 #[cfg(feature = "mcp")] mcp_manager,
-                                            ).await;
+                                            ).await);
                                             render_session(&mut renderer, session, cli, cfg, context)?;
                                             renderer.write_line(
                                                 &format!("returned to main repo at {}", main_path),
@@ -547,7 +600,12 @@ pub async fn run_interactive(
                                         {
                                             ls.iteration = 1;
                                             let prompt = ls.build_prompt();
-                                            let runner = agent.clone().spawn_runner(prompt, Vec::new());
+                                            ensure_agent(
+                                                &mut agent, &client, session, cli, cfg, context,
+                                                &permission, &ask_tx, &sandbox, reasoning_enabled,
+                                                #[cfg(feature = "mcp")] mcp_manager,
+                                            ).await;
+                                            let runner = agent.as_ref().unwrap().clone().spawn_runner(prompt, Vec::new());
                                             agent_rx = Some(runner.event_rx);
                                             is_running = true;
                                             loop_label = Some(ls.iteration_label());
@@ -569,8 +627,13 @@ pub async fn run_interactive(
                                 }
                                 renderer.write_line("", Color::White)?;
 
+                                ensure_agent(
+                                    &mut agent, &client, session, cli, cfg, context,
+                                    &permission, &ask_tx, &sandbox, reasoning_enabled,
+                                    #[cfg(feature = "mcp")] mcp_manager,
+                                ).await;
                                 let history = crate::agent::runner::convert_history(session);
-                                let runner = agent.clone().spawn_runner(
+                                let runner = agent.as_ref().unwrap().clone().spawn_runner(
                                     text.to_string(),
                                     history,
                                 );
@@ -587,8 +650,16 @@ pub async fn run_interactive(
                                     );
                                 }
                             }
+                            refresh_display(&mut renderer, &input, session, is_running, loop_label.as_deref(), context.current_prompt_name.as_deref(), perm_mode().as_deref())?;
+                        } else if is_running {
+                            refresh_display(&mut renderer, &input, session, is_running, loop_label.as_deref(), context.current_prompt_name.as_deref(), perm_mode().as_deref())?;
+                        } else {
+                            let status = StatusLine::render(session, is_running, 0, loop_label.as_deref(), context.current_prompt_name.as_deref(), perm_mode().as_deref());
+                            renderer.draw_bottom(&input.buffer, input.cursor, &status, is_running)?;
+                            if let Some(ref picker) = input.picker {
+                                picker.draw()?;
+                            }
                         }
-                        refresh_display(&mut renderer, &input, session, is_running, loop_label.as_deref(), context.current_prompt_name.as_deref(), perm_mode().as_deref())?;
                     }
                 }
             }
@@ -759,7 +830,12 @@ pub async fn run_interactive(
                                 ls.last_summary = Some(summary);
                                 ls.iteration += 1;
                                 let prompt = ls.build_prompt();
-                                let runner = agent.clone().spawn_runner(prompt, Vec::new());
+                                ensure_agent(
+                                    &mut agent, &client, session, cli, cfg, context,
+                                    &permission, &ask_tx, &sandbox, reasoning_enabled,
+                                    #[cfg(feature = "mcp")] mcp_manager,
+                                ).await;
+                                let runner = agent.as_ref().unwrap().clone().spawn_runner(prompt, Vec::new());
                                 agent_rx = Some(runner.event_rx);
                                 is_running = true;
                                 loop_label = Some(ls.iteration_label());
@@ -777,7 +853,7 @@ pub async fn run_interactive(
                                     session.working_dir = compact_str::CompactString::new(&main_path);
                                     context.reload();
                                     let model = client.completion_model(session.model.to_string());
-                                    agent = crate::provider::build_agent(
+                                    agent = Some(crate::provider::build_agent(
                                         model,
                                         cli,
                                         cfg,
@@ -787,7 +863,7 @@ pub async fn run_interactive(
                                         sandbox.clone(),
                                         reasoning_enabled,
                                         #[cfg(feature = "mcp")] mcp_manager,
-                                    ).await;
+                                    ).await);
                                     render_session(&mut renderer, session, cli, cfg, context)?;
                                     renderer.write_line(
                                         &format!("merged and returned to main repo at {}", main_path),
@@ -867,17 +943,17 @@ pub async fn run_interactive(
                 let _ = ask_req.reply.send(decision);
 
                 if let Some(pattern) = allow_pattern {
-                    session.permission_allowlist.push(PermissionAllowEntry {
-                        tool: ask_req.tool.clone(),
-                        pattern: pattern.clone(),
-                    });
-                    if !cli.no_session {
-                        let _ = crate::session::storage::save_session(session);
-                    }
                     renderer.write_line(
                         &format!("  allowed {} {} (saved to session)", ask_req.tool, pattern),
                         Color::Green,
                     )?;
+                    session.permission_allowlist.push(PermissionAllowEntry {
+                        tool: ask_req.tool.clone(),
+                        pattern: pattern.into(),
+                    });
+                    if !cli.no_session {
+                        let _ = crate::session::storage::save_session(session);
+                    }
                 }
 
                 refresh_display(&mut renderer, &input, session, is_running, loop_label.as_deref(), context.current_prompt_name.as_deref(), perm_mode().as_deref())?;

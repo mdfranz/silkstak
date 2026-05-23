@@ -2,6 +2,7 @@ use compact_str::CompactString;
 use rig::agent::{Agent, AgentBuilder};
 use rig::completion::CompletionModel;
 use rig::providers::openrouter;
+use smallvec::SmallVec;
 
 use crate::agent::prompt::{SYSTEM_PROMPT, TODO_TOOLS_PROMPT};
 use crate::agent::tools;
@@ -29,27 +30,42 @@ pub async fn build_agent_inner<M: CompletionModel + 'static>(
     reasoning_enabled: bool,
     #[cfg(feature = "mcp")] mcp_manager: Option<&McpClientManager>,
 ) -> Agent<M> {
-    let mut preamble = if reasoning_enabled {
-        "You reason carefully and think step-by-step.\n\n".to_string()
+    let reasoning_prefix = if reasoning_enabled {
+        "You reason carefully and think step-by-step.\n\n"
     } else {
-        "You respond concisely without showing your reasoning.\n\n".to_string()
+        "You respond concisely without showing your reasoning.\n\n"
     };
+    let context_agents = context.agents.as_deref().unwrap_or("");
+    let context_prompt = context.current_prompt.as_deref().unwrap_or("");
+    let cwd = std::env::current_dir()
+        .ok()
+        .map(|p| p.display().to_string())
+        .unwrap_or_default();
+
+    let total_len = reasoning_prefix.len()
+        + SYSTEM_PROMPT.len()
+        + 1
+        + TODO_TOOLS_PROMPT.len()
+        + if context.agents.is_some() { 2 + context_agents.len() } else { 0 }
+        + if context.current_prompt.is_some() { 6 + context_prompt.len() } else { 0 }
+        + if !cwd.is_empty() { 30 + cwd.len() } else { 0 };
+
+    let mut preamble = String::with_capacity(total_len);
+    preamble.push_str(reasoning_prefix);
     preamble.push_str(SYSTEM_PROMPT);
     preamble.push('\n');
     preamble.push_str(TODO_TOOLS_PROMPT);
-    if let Some(agents) = &context.agents {
+    if !context_agents.is_empty() {
         preamble.push_str("\n\n");
-        preamble.push_str(agents);
+        preamble.push_str(context_agents);
     }
-
-    if let Some(prompt) = &context.current_prompt {
+    if !context_prompt.is_empty() {
         preamble.push_str("\n\n---\n\n");
-        preamble.push_str(prompt);
+        preamble.push_str(context_prompt);
     }
-
-    if let Ok(cwd) = std::env::current_dir() {
-        let cwd_str = cwd.display();
-        preamble.push_str(&format!("\n\nCurrent working directory: {}", cwd_str));
+    if !cwd.is_empty() {
+        preamble.push_str("\n\nCurrent working directory: ");
+        preamble.push_str(&cwd);
     }
 
     let mut builder = AgentBuilder::new(model).preamble(&preamble);
@@ -68,9 +84,10 @@ pub async fn build_agent_inner<M: CompletionModel + 'static>(
     if cli.resolve_no_tools(cfg) {
         builder.build()
     } else {
-        let base_tools: Vec<Box<dyn rig::tool::ToolDyn>> = vec![
-            Box::new(tools::ReadTool::new(permission.clone(), ask_tx.clone())),
-            Box::new(tools::WriteTool::new(permission.clone(), ask_tx.clone())),
+        let max_text_file_size = cfg.max_text_file_size;
+        let base_tools: SmallVec<[Box<dyn rig::tool::ToolDyn>; 8]> = SmallVec::from_buf([
+            Box::new(tools::ReadTool::new(permission.clone(), ask_tx.clone(), max_text_file_size)),
+            Box::new(tools::WriteTool::new(permission.clone(), ask_tx.clone(), max_text_file_size)),
             Box::new(tools::EditTool::new(permission.clone(), ask_tx.clone())),
             Box::new(tools::BashTool::new(
                 permission.clone(),
@@ -87,15 +104,17 @@ pub async fn build_agent_inner<M: CompletionModel + 'static>(
                 permission.clone(),
                 ask_tx.clone(),
             )),
-        ];
+        ]);
 
-        #[allow(unused_mut)]
-        let mut builder = builder.tools(base_tools);
+        let mut builder = builder.tools(base_tools.into_vec());
 
         #[cfg(feature = "mcp")]
         if let Some(manager) = &mcp_manager {
+            let allow_all = cfg.allow_all_mcp_calls.unwrap_or(false);
+            let mcp_permission = if allow_all { None } else { permission.clone() };
+            let mcp_ask_tx = if allow_all { None } else { ask_tx.clone() };
             let mcp_tools = manager
-                .collect_tools(permission.clone(), ask_tx.clone())
+                .collect_tools(mcp_permission, mcp_ask_tx)
                 .await;
             if !mcp_tools.is_empty() {
                 let dyn_tools: Vec<Box<dyn rig::tool::ToolDyn>> = mcp_tools

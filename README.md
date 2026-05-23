@@ -39,7 +39,9 @@ cargo install zerostack
 cargo install zerostack --features acp
 ```
 
-You are now ready to work with a lightweight coding agent! (Note: you can also find pre-built binaries on Github Releases)
+You are now ready to work with a lightweight coding agent! (You can also find pre-built binaries on Github Releases)
+
+*note:* If you have questions or you want to collaborate on the project, please join the [dedicated Matrix chatroom](https://app.element.io/#/room/#zerostack-general:matrix.org).
 
 ### Optional: sandbox mode
 
@@ -235,7 +237,7 @@ zerostack --acp --acp-host 0.0.0.0 --acp-port 7243
 
 ### ACP config
 
-In `$XDG_CONFIG_HOME/zerostack/config.json`:
+In `~/.local/share/zerostack/config.json`:
 
 ```json
 {
@@ -260,7 +262,7 @@ and API key env vars apply). Without it, zerostack cannot process prompts.
 - Ollama
 
 Custom providers can be configured with any base URL and API key environment
-variable in  `$XDG_CONFIG_HOME/zerostack/config.json`.
+variable in  `~/.local/share/zerostack/config.json`.
 
 ## License
 

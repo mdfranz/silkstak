@@ -104,7 +104,7 @@ impl Tool for GrepTool {
             .build();
 
         let mut file_count = 0;
-        let mut all_results: Vec<String> = Vec::new();
+        let mut all_results: Vec<String> = Vec::with_capacity(MAX_GREP_RESULTS.min(64));
 
         for entry in walker
             .flatten()

@@ -14,13 +14,15 @@ mod ui;
 #[cfg(test)]
 mod tests;
 
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 use clap::Parser;
-use compact_str::CompactString;
 use session::MessageRole;
 
 use crate::permission::ask::AskSender;
 use crate::permission::checker::{PermCheck, PermissionChecker};
-use crate::permission::{PermissionConfig, SecurityMode};
+use crate::permission::SecurityMode;
 
 fn resolve_mode(cli: &cli::Cli, cfg: &config::Config) -> SecurityMode {
     if cli.yolo || cfg.yolo.unwrap_or(false) {
@@ -54,11 +56,7 @@ fn build_permission_checker(
         return (None, None, None);
     }
 
-    let perm_config: PermissionConfig = cfg
-        .permission
-        .as_ref()
-        .and_then(|v| serde_json::from_value(v.clone()).ok())
-        .unwrap_or_default();
+    let perm_config = cfg.build_permission_config();
 
     let mode = resolve_mode(cli, cfg);
     let checker = PermissionChecker::new(&perm_config, mode, None);
@@ -98,8 +96,8 @@ async fn main() -> anyhow::Result<()> {
 
     // --quick-model overrides provider + model
     if let Some(qm) = cli.resolve_quick_model(&cfg) {
-        provider = CompactString::new(&qm.provider);
-        model = CompactString::new(&qm.model);
+        provider = qm.provider.clone();
+        model = qm.model.clone();
     }
 
     let mut session = session::Session::new(&provider, &model, cfg.resolve_context_window());
@@ -176,7 +174,7 @@ async fn main() -> anyhow::Result<()> {
         let allowlist: Vec<(String, String)> = session
             .permission_allowlist
             .iter()
-            .map(|e| (e.tool.clone(), e.pattern.clone()))
+            .map(|e| (e.tool.to_string(), e.pattern.to_string()))
             .collect();
         perm.lock()
             .unwrap_or_else(|e| e.into_inner())
@@ -232,20 +230,6 @@ async fn main() -> anyhow::Result<()> {
             return run_headless_loop(agent, &cli, &cfg, &context).await;
         }
 
-        let agent = provider::build_agent(
-            completion_model,
-            &cli,
-            &cfg,
-            &context,
-            permission.clone(),
-            ask_tx.clone(),
-            sandbox.clone(),
-            true,
-            #[cfg(feature = "mcp")]
-            mcp_manager.as_ref(),
-        )
-        .await;
-
         if !cli.resolve_no_tools(&cfg)
             && let Some(perm) = &permission
         {
@@ -261,7 +245,7 @@ async fn main() -> anyhow::Result<()> {
         }
         ui::run_interactive(
             client,
-            agent,
+            None,
             &cli,
             &cfg,
             &mut session,

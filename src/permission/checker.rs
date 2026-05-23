@@ -2,6 +2,8 @@ use std::collections::{HashMap, VecDeque};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
+use smallvec::SmallVec;
+
 use crate::permission::pattern::Pattern;
 use crate::permission::{Action, PermissionConfig, SecurityMode, ToolPerm};
 
@@ -60,6 +62,25 @@ impl PermissionChecker {
             rules.insert(tool_name.to_string(), entries);
         }
 
+        fn merge_entries(
+            rules: &mut HashMap<String, Vec<(Pattern, Action)>>,
+            entries: &Option<HashMap<String, Vec<String>>>,
+            action: Action,
+        ) {
+            if let Some(map) = entries {
+                for (tool, patterns) in map {
+                    let entry = rules.entry(tool.clone()).or_default();
+                    for pat in patterns {
+                        entry.push((Pattern::new(pat), action));
+                    }
+                }
+            }
+        }
+
+        merge_entries(&mut rules, &config.allow_entries, Action::Allow);
+        merge_entries(&mut rules, &config.ask_entries, Action::Ask);
+        merge_entries(&mut rules, &config.deny_entries, Action::Deny);
+
         if !rules.contains_key("bash") {
             let mut defaults = Vec::new();
             for (pat, action) in crate::permission::default_bash_rules() {
@@ -104,7 +125,7 @@ impl PermissionChecker {
             return CheckResult::Allowed;
         }
 
-        let mut matched: Vec<Action> = Vec::new();
+        let mut matched: SmallVec<[Action; 4]> = SmallVec::new();
         if let Some(rules) = self.rules.get(tool) {
             for (pattern, action) in rules {
                 if pattern.matches(input) {
@@ -168,7 +189,7 @@ impl PermissionChecker {
         }
 
         let abs_path = resolve_absolute(path, &self.working_dir);
-        let mut matched: Vec<Action> = Vec::new();
+        let mut matched: SmallVec<[Action; 4]> = SmallVec::new();
         if let Some(rules) = self.rules.get(tool) {
             for (pattern, action) in rules {
                 if pattern.matches(&abs_path) || pattern.matches(path) {

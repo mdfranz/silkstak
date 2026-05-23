@@ -7,6 +7,7 @@ use crossterm::style::{
     Attribute, Color, ResetColor, SetAttribute, SetBackgroundColor, SetForegroundColor,
 };
 use crossterm::terminal::{Clear, ClearType, ScrollUp};
+use smallvec::{smallvec, SmallVec};
 
 use super::markdown::word_wrap;
 use super::resolve_color;
@@ -178,7 +179,7 @@ impl Renderer {
         }
     }
 
-    fn wrap_line(&self, line: &str, max_width: usize) -> Vec<CompactString> {
+    fn wrap_line(&self, line: &str, max_width: usize) -> SmallVec<[CompactString; 4]> {
         word_wrap(line, max_width)
     }
 
@@ -254,6 +255,7 @@ impl Renderer {
         let visible = rows.saturating_sub(2) as usize;
         let total = self.buffer.len();
         let mut stdout = io::stdout();
+        write!(stdout, "{}", Hide)?;
 
         let start = if self.scroll_offset == 0 {
             total.saturating_sub(visible)
@@ -272,7 +274,7 @@ impl Renderer {
             let wrapped = if text.chars().count() > max_width {
                 word_wrap(text, max_width)
             } else {
-                vec![text.clone()]
+                smallvec![text.clone()]
             };
 
             for chunk in &wrapped {
@@ -427,7 +429,7 @@ impl Renderer {
         if max_width == 0 {
             return Ok(());
         }
-        let parts: Vec<&str> = text.split('\n').collect();
+        let parts: SmallVec<[&str; 4]> = text.split('\n').collect();
         let last = parts.len() - 1;
         for (i, segment) in parts.iter().enumerate() {
             if i < last {
@@ -462,7 +464,7 @@ impl Renderer {
                     self.col = 0;
                 }
             } else if !segment.is_empty() {
-                let chars: Vec<char> = segment.chars().collect();
+                let chars: SmallVec<[char; 64]> = segment.chars().collect();
                 let mut idx = 0;
                 while idx < chars.len() {
                     let avail = max_width.saturating_sub(self.col as usize);
@@ -551,7 +553,7 @@ impl Renderer {
 
         let status_row = rows.saturating_sub(1);
 
-        let lines: Vec<&str> = input_line.split('\n').collect();
+        let lines: SmallVec<[&str; 4]> = input_line.split('\n').collect();
         let line_count = lines.len();
 
         let last_line = rows.saturating_sub(2) as usize - 1;
@@ -618,7 +620,7 @@ impl Renderer {
                 write!(stdout, "{}", " ".repeat(prompt_width))?;
             }
 
-            let line_chars: Vec<char> = line.chars().collect();
+            let line_chars: SmallVec<[char; 64]> = line.chars().collect();
             let h_offset = if i == cursor_line { h_scroll } else { 0 };
             let display: String = line_chars
                 .iter()
@@ -661,6 +663,7 @@ impl Renderer {
             (rows.saturating_sub(2) - visible_line_count as u16 + 1) + cursor_render_idx as u16;
         let cursor_x = (prompt_width + cursor_col.saturating_sub(h_scroll)) as u16;
         stdout.execute(MoveTo(cursor_x, cursor_row))?;
+        write!(stdout, "{}", Show)?;
         stdout.flush()?;
         Ok(())
     }
@@ -686,5 +689,82 @@ pub fn copy_to_clipboard(text: &str) {
             let _ = child.wait();
             return;
         }
+    }
+
+    // OSC 52 escape sequence — clipboard access via terminal emulator.
+    // Supported by Kitty, Alacritty, WezTerm, foot, iTerm2, Windows Terminal,
+    // and most other modern terminals. No external tools needed.
+    let encoded = base64_encode(text.as_bytes());
+    let mut stdout = std::io::stdout().lock();
+    let _ = write!(stdout, "\x1b]52;c;{encoded}\x07");
+    let _ = stdout.flush();
+}
+
+/// Minimal base64 encoder — avoids pulling in a crate just for clipboard support.
+fn base64_encode(input: &[u8]) -> String {
+    const ALPHABET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity((input.len() + 2) / 3 * 4);
+    for chunk in input.chunks(3) {
+        let b0 = chunk[0] as usize;
+        let b1 = chunk.get(1).copied().unwrap_or(0) as usize;
+        let b2 = chunk.get(2).copied().unwrap_or(0) as usize;
+        let triple = (b0 << 16) | (b1 << 8) | b2;
+        out.push(ALPHABET[(triple >> 18) & 63] as char);
+        out.push(ALPHABET[(triple >> 12) & 63] as char);
+        out.push(if chunk.len() > 1 { ALPHABET[(triple >> 6) & 63] } else { b'=' } as char);
+        out.push(if chunk.len() > 2 { ALPHABET[triple & 63] } else { b'=' } as char);
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn base64_encode_empty() {
+        assert_eq!(base64_encode(b""), "");
+    }
+
+    #[test]
+    fn base64_encode_single_byte() {
+        assert_eq!(base64_encode(b"f"), "Zg==");
+    }
+
+    #[test]
+    fn base64_encode_two_bytes() {
+        assert_eq!(base64_encode(b"fo"), "Zm8=");
+    }
+
+    #[test]
+    fn base64_encode_three_bytes() {
+        assert_eq!(base64_encode(b"foo"), "Zm9v");
+    }
+
+    #[test]
+    fn base64_encode_known_values() {
+        assert_eq!(base64_encode(b"Hello"), "SGVsbG8=");
+        assert_eq!(base64_encode(b"Hi!"), "SGkh");
+        assert_eq!(base64_encode(b"ab"), "YWI=");
+        assert_eq!(base64_encode(b"abc"), "YWJj");
+        assert_eq!(base64_encode(b"Man"), "TWFu");
+    }
+
+    #[test]
+    fn base64_encode_long_input() {
+        let input = "The quick brown fox jumps over the lazy dog. ".repeat(10);
+        let encoded = base64_encode(input.as_bytes());
+        assert!(encoded.len() > input.len());
+        assert!(encoded.ends_with('=') || !encoded.contains('='));
+    }
+
+    #[test]
+    fn copy_to_clipboard_does_not_panic() {
+        copy_to_clipboard("test text");
+    }
+
+    #[test]
+    fn copy_to_clipboard_empty_string() {
+        copy_to_clipboard("");
     }
 }

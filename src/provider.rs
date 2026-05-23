@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use compact_str::CompactString;
 use rig::agent::Agent;
 use rig::client::CompletionClient;
 use rig::completion::{CompletionModel, Message};
@@ -23,7 +24,8 @@ use crate::session::SessionMessage;
 pub struct ProviderConfig {
     pub kind: ProviderKind,
     pub base_url: Option<String>,
-    pub api_key_env: Option<String>,
+    pub api_key_env: Option<CompactString>,
+    pub danger_accept_invalid_certs: bool,
 }
 
 pub fn resolve_provider_config(
@@ -37,6 +39,7 @@ pub fn resolve_provider_config(
             kind,
             base_url: Some(custom.base_url.clone()),
             api_key_env: custom.api_key_env.clone(),
+            danger_accept_invalid_certs: custom.danger_accept_invalid_certs.unwrap_or(false),
         });
     }
     let kind = ProviderKind::from_name(name).ok_or_else(|| {
@@ -50,6 +53,7 @@ pub fn resolve_provider_config(
         kind,
         base_url: None,
         api_key_env: None,
+        danger_accept_invalid_certs: false,
     })
 }
 

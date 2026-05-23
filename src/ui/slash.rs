@@ -48,7 +48,7 @@ pub fn undo_last(session: &mut Session) -> usize {
 #[allow(clippy::too_many_arguments)]
 pub async fn handle_compress(
     instructions: Option<&str>,
-    agent: &mut AnyAgent,
+    agent: &mut Option<AnyAgent>,
     client: &mut AnyClient,
     renderer: &mut Renderer,
     session: &mut Session,
@@ -108,7 +108,7 @@ pub async fn handle_compress(
     session.compress(summary, cut_idx, tokens_before);
 
     let model = client.completion_model(session.model.to_string());
-    *agent = crate::provider::build_agent(
+    *agent = Some(crate::provider::build_agent(
         model,
         cli,
         cfg,
@@ -120,7 +120,7 @@ pub async fn handle_compress(
         #[cfg(feature = "mcp")]
         mcp_manager,
     )
-    .await;
+    .await);
     renderer.write_line("prompt cleared (back to default behavior)", C_AGENT)?;
 
     render_session(renderer, session, cli, cfg, context)?;
@@ -138,7 +138,7 @@ pub async fn handle_compress(
 #[allow(clippy::too_many_arguments)]
 pub async fn handle_slash(
     text: &str,
-    agent: &mut AnyAgent,
+    agent: &mut Option<AnyAgent>,
     client: &mut AnyClient,
     renderer: &mut Renderer,
     session: &mut Session,
@@ -177,7 +177,7 @@ pub async fn handle_slash(
                     cfg.api_keys.as_ref(),
                 )?;
                 let model = client.completion_model(session.model.to_string());
-                *agent = crate::provider::build_agent(
+                *agent = Some(crate::provider::build_agent(
                     model,
                     cli,
                     cfg,
@@ -189,7 +189,7 @@ pub async fn handle_slash(
                     #[cfg(feature = "mcp")]
                     mcp_manager,
                 )
-                .await;
+                .await);
                 session.provider = CompactString::new(new_provider);
                 renderer.write_line(&format!("switched to provider: {}", new_provider), C_AGENT)?;
             }
@@ -200,7 +200,7 @@ pub async fn handle_slash(
             } else {
                 let new_model = CompactString::new(parts[1].trim());
                 let model = client.completion_model(new_model.to_string());
-                *agent = crate::provider::build_agent(
+                *agent = Some(crate::provider::build_agent(
                     model,
                     cli,
                     cfg,
@@ -212,7 +212,7 @@ pub async fn handle_slash(
                     #[cfg(feature = "mcp")]
                     mcp_manager,
                 )
-                .await;
+                .await);
                 session.model = new_model.clone();
                 session.provider = cli.resolve_provider(cfg);
                 renderer.write_line(&format!("switched to model: {}", new_model), C_AGENT)?;
@@ -251,7 +251,7 @@ pub async fn handle_slash(
                         cfg.api_keys.as_ref(),
                     )?;
                     let model = client.completion_model(q.model.to_string());
-                    *agent = crate::provider::build_agent(
+                    *agent = Some(crate::provider::build_agent(
                         model,
                         cli,
                         cfg,
@@ -263,7 +263,7 @@ pub async fn handle_slash(
                         #[cfg(feature = "mcp")]
                         mcp_manager,
                     )
-                    .await;
+                    .await);
                     session.provider = CompactString::new(&q.provider);
                     session.model = CompactString::new(&q.model);
                     renderer.write_line(
@@ -441,7 +441,7 @@ pub async fn handle_slash(
             *reasoning_enabled = !*reasoning_enabled;
             *show_reasoning = *reasoning_enabled;
             let model = client.completion_model(session.model.to_string());
-            *agent = crate::provider::build_agent(
+            *agent = Some(crate::provider::build_agent(
                 model,
                 cli,
                 cfg,
@@ -453,7 +453,7 @@ pub async fn handle_slash(
                 #[cfg(feature = "mcp")]
                 mcp_manager,
             )
-            .await;
+            .await);
             renderer.write_line(
                 &format!(
                     "reasoning: {}",
@@ -627,7 +627,7 @@ pub async fn handle_slash(
                 } else {
                     *todo_tools_enabled = new_state;
                     let model = client.completion_model(session.model.to_string());
-                    *agent = crate::provider::build_agent(
+                    *agent = Some(crate::provider::build_agent(
                         model,
                         cli,
                         cfg,
@@ -639,7 +639,7 @@ pub async fn handle_slash(
                         #[cfg(feature = "mcp")]
                         mcp_manager,
                     )
-                    .await;
+                    .await);
                     renderer.write_line(
                         &format!(
                             "todo tools: {}",
@@ -733,7 +733,7 @@ pub async fn handle_slash(
                     context.current_prompt = None;
                     context.current_prompt_name = None;
                     let model = client.completion_model(session.model.to_string());
-                    *agent = crate::provider::build_agent(
+                    *agent = Some(crate::provider::build_agent(
                         model,
                         cli,
                         cfg,
@@ -745,7 +745,7 @@ pub async fn handle_slash(
                         #[cfg(feature = "mcp")]
                         mcp_manager,
                     )
-                    .await;
+                    .await);
                 }
             } else {
                 let name = parts[1].trim();
@@ -753,7 +753,7 @@ pub async fn handle_slash(
                     context.current_prompt = Some(content.clone());
                     context.current_prompt_name = Some(name.to_string());
                     let model = client.completion_model(session.model.to_string());
-                    *agent = crate::provider::build_agent(
+                    *agent = Some(crate::provider::build_agent(
                         model,
                         cli,
                         cfg,
@@ -765,7 +765,7 @@ pub async fn handle_slash(
                         #[cfg(feature = "mcp")]
                         mcp_manager,
                     )
-                    .await;
+                    .await);
                     renderer.write_line(&format!("active prompt: {}", name), C_AGENT)?;
                 } else {
                     renderer.write_line(&format!("unknown prompt: '{}'", name), C_ERROR)?;
@@ -773,6 +773,48 @@ pub async fn handle_slash(
                         renderer.write_line("available prompts:", C_AGENT)?;
                         for p in &sorted {
                             renderer.write_line(&format!("  {}", p), C_RESULT)?;
+                        }
+                    }
+                }
+            }
+        }
+        "/theme" => {
+            let mut sorted: Vec<&String> = context.themes.keys().collect();
+            sorted.sort();
+            if parts.len() < 2 {
+                if sorted.is_empty() {
+                    renderer.write_line("no themes available", C_AGENT)?;
+                } else {
+                    let current = context.current_theme_name.as_deref().unwrap_or("(none)");
+                    renderer.write_line(
+                        &format!("available themes (current: {}):", current),
+                        C_AGENT,
+                    )?;
+                    for name in &sorted {
+                        renderer.write_line(&format!("  {}", name), C_RESULT)?;
+                    }
+                    renderer.write_line("", C_AGENT)?;
+                    renderer.write_line("usage: /theme <name>  |  /theme default", C_RESULT)?;
+                }
+            } else if parts[1] == "default" {
+                if context.current_theme_name.is_none() {
+                    renderer.write_line("no active theme to clear", C_AGENT)?;
+                } else {
+                    context.current_theme_name = None;
+                    renderer.write_line("theme cleared (using config colors)", C_AGENT)?;
+                }
+            } else {
+                let name = parts[1].trim();
+                if let Some(content) = context.themes.get(name) {
+                    context.current_theme_name = Some(name.to_string());
+                    crate::context::themes::apply(content, renderer);
+                    renderer.write_line(&format!("active theme: {}", name), C_AGENT)?;
+                } else {
+                    renderer.write_line(&format!("unknown theme: '{}'", name), C_ERROR)?;
+                    if !sorted.is_empty() {
+                        renderer.write_line("available themes:", C_AGENT)?;
+                        for t in &sorted {
+                            renderer.write_line(&format!("  {}", t), C_RESULT)?;
                         }
                     }
                 }
@@ -800,7 +842,7 @@ pub async fn handle_slash(
                     session.working_dir = compact_str::CompactString::new(path.to_string_lossy());
                     context.reload();
                     let model = client.completion_model(session.model.to_string());
-                    *agent = crate::provider::build_agent(
+                    *agent = Some(crate::provider::build_agent(
                         model,
                         cli,
                         cfg,
@@ -812,7 +854,7 @@ pub async fn handle_slash(
                         #[cfg(feature = "mcp")]
                         mcp_manager,
                     )
-                    .await;
+                    .await);
                     render_session(renderer, session, cli, cfg, context)?;
                     renderer.write_line(
                         &format!("worktree created: branch '{}' at {}", name, path.display()),
@@ -890,6 +932,15 @@ pub async fn handle_slash(
             }
             Err(e) => {
                 renderer.write_line(&format!("failed to regenerate prompts: {}", e), C_ERROR)?;
+            }
+        },
+        "/regen-themes" => match crate::context::themes::regen() {
+            Ok(()) => {
+                context.themes = crate::context::themes::load();
+                renderer.write_line("default themes regenerated", C_AGENT)?;
+            }
+            Err(e) => {
+                renderer.write_line(&format!("failed to regenerate themes: {}", e), C_ERROR)?;
             }
         },
         "/history" => match crate::session::chat_history::load_history() {
@@ -1017,8 +1068,15 @@ pub async fn handle_slash(
             renderer.write_line("  /prompt                list available prompts", C_RESULT)?;
             renderer.write_line("  /prompt <name>         activate a prompt", C_RESULT)?;
             renderer.write_line("  /prompt default        clear active prompt", C_RESULT)?;
+            renderer.write_line("  /theme                 list available themes", C_RESULT)?;
+            renderer.write_line("  /theme <name>          activate a theme", C_RESULT)?;
+            renderer.write_line("  /theme default         clear active theme", C_RESULT)?;
             renderer.write_line(
                 "  /regen-prompts        restore built-in prompts to global dir",
+                C_RESULT,
+            )?;
+            renderer.write_line(
+                "  /regen-themes         restore built-in themes to config dir",
                 C_RESULT,
             )?;
             #[cfg(feature = "git-worktree")]

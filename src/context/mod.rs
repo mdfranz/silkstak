@@ -6,12 +6,15 @@ use smallvec::SmallVec;
 use crate::session::storage;
 
 pub mod prompts;
+pub mod themes;
 
 pub struct ContextFiles {
     pub agents: Option<String>,
     pub prompts: HashMap<String, String>,
     pub current_prompt: Option<String>,
     pub current_prompt_name: Option<String>,
+    pub themes: HashMap<String, String>,
+    pub current_theme_name: Option<String>,
 }
 
 impl ContextFiles {
@@ -22,22 +25,27 @@ impl ContextFiles {
         if let Some(name) = &self.current_prompt_name {
             self.current_prompt = self.prompts.get(name).cloned();
         }
+        self.themes = themes::load();
     }
 }
 
 pub fn load(no_context_files: bool) -> ContextFiles {
     let _ = prompts::ensure_global();
+    let _ = themes::ensure_global();
     let agents = if no_context_files {
         None
     } else {
         load_agents()
     };
     let prompt_map = prompts::load();
+    let theme_map = themes::load();
     ContextFiles {
         agents,
         prompts: prompt_map,
         current_prompt: None,
         current_prompt_name: None,
+        themes: theme_map,
+        current_theme_name: None,
     }
 }
 
