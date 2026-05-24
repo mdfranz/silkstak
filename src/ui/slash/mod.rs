@@ -278,7 +278,7 @@ pub async fn handle_slash(
         "/reasoning" | "/thinking" | "/mode" | "/toggle" | "/mcp" => {
             settings::handle(&parts, &mut ctx).await
         }
-        "/sessions" | "/clear" | "/undo" | "/retry" | "/quit" | "/history" => {
+        "/sessions" | "/clear" | "/new" | "/undo" | "/retry" | "/quit" | "/exit" | "/history" => {
             session::handle(&parts, &mut ctx).await
         }
         "/help" => {

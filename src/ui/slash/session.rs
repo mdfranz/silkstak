@@ -4,10 +4,10 @@ use crate::ui::slash::{SlashCtx, undo_last, write_error, write_ok, write_result}
 pub async fn handle(parts: &[&str], ctx: &mut SlashCtx<'_>) -> anyhow::Result<()> {
     match parts[0] {
         "/sessions" => handle_sessions(parts, ctx).await,
-        "/clear" => handle_clear(ctx).await,
+        "/clear" | "/new" => handle_clear(ctx).await,
         "/undo" => handle_undo(ctx).await,
         "/retry" => handle_retry(ctx).await,
-        "/quit" => handle_quit(ctx).await,
+        "/quit" | "/exit" => handle_quit(ctx).await,
         "/history" => handle_history(ctx).await,
         _ => Ok(()),
     }

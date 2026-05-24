@@ -52,7 +52,7 @@ pub fn handle(_parts: &[&str], ctx: &mut SlashCtx<'_>) {
             "  /mcp <server>          list tools of an MCP server",
         );
     }
-    write_result(ctx.renderer, "  /clear                 clear screen");
+    write_result(ctx.renderer, "  /clear [/new]          clear screen");
     write_result(ctx.renderer, "  /undo                  undo last exchange");
     write_result(ctx.renderer, "  /retry                 retry last prompt");
     write_result(
@@ -117,7 +117,7 @@ pub fn handle(_parts: &[&str], ctx: &mut SlashCtx<'_>) {
         ctx.renderer,
         "  /history               show global chat history",
     );
-    write_result(ctx.renderer, "  /quit                  exit zerostack");
+    write_result(ctx.renderer, "  /quit [/exit]          exit zerostack");
     write_result(ctx.renderer, "  /help                  show this message");
     write_result(ctx.renderer, "");
     write_ok(ctx.renderer, "keys:");

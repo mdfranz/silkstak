@@ -662,7 +662,7 @@ pub async fn run_interactive(
                 ).await?;
                 refresh_display(&mut renderer, &input, session, is_running, loop_label.as_deref(), context.current_prompt_name.as_deref(), perm_mode().as_deref())?;
             }
-            _ = tokio::time::sleep(tokio::time::Duration::from_millis(200)), if is_running => {
+            _ = tokio::time::sleep(tokio::time::Duration::from_millis(100)), if is_running => {
                 refresh_display(&mut renderer, &input, session, is_running, loop_label.as_deref(), context.current_prompt_name.as_deref(), perm_mode().as_deref())?;
             }
             else => {
