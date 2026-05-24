@@ -65,10 +65,10 @@ impl Tool for ListDirTool {
     }
 
     async fn call(&self, args: ListDirArgs) -> Result<String, ToolError> {
-        let path = args.path.as_deref().unwrap_or(".");
-        check_perm_path(&self.permission, &self.ask_tx, "list_dir", path).await?;
+        let path = crate::fs::expand_tilde(args.path.as_deref().unwrap_or("."));
+        check_perm_path(&self.permission, &self.ask_tx, "list_dir", &path).await?;
 
-        let walker = WalkBuilder::new(path)
+        let walker = WalkBuilder::new(&path)
             .git_ignore(true)
             .git_global(true)
             .git_exclude(true)

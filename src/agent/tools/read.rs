@@ -49,9 +49,10 @@ impl Tool for ReadTool {
     }
 
     async fn call(&self, args: ReadArgs) -> Result<String, ToolError> {
-        check_perm_path(&self.permission, &self.ask_tx, "read", &args.path).await?;
+        let path = crate::fs::expand_tilde(&args.path);
+        check_perm_path(&self.permission, &self.ask_tx, "read", &path).await?;
 
-        let metadata = tokio::fs::metadata(&args.path).await?;
+        let metadata = tokio::fs::metadata(&path).await?;
         let file_size = metadata.len();
         if file_size > self.max_text_file_size {
             return Err(ToolError::Msg(format!(
@@ -59,7 +60,7 @@ impl Tool for ReadTool {
                 file_size, self.max_text_file_size
             )));
         }
-        let content = tokio::fs::read_to_string(&args.path).await?;
+        let content = tokio::fs::read_to_string(&path).await?;
         let total_lines = content.lines().count();
 
         let offset = args.offset.unwrap_or(1).max(1) - 1;
@@ -74,7 +75,7 @@ impl Tool for ReadTool {
             .join("\n");
         let info = format!(
             "File: {} ({} lines total, showing lines {}-{})\n\n{}",
-            args.path,
+            path,
             total_lines,
             offset + 1,
             end,

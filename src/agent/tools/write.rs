@@ -50,13 +50,14 @@ impl Tool for WriteTool {
     }
 
     async fn call(&self, args: WriteArgs) -> Result<String, ToolError> {
-        check_perm_path(&self.permission, &self.ask_tx, "write", &args.path).await?;
+        let expanded = crate::fs::expand_tilde(&args.path);
+        check_perm_path(&self.permission, &self.ask_tx, "write", &expanded).await?;
 
-        let path = Path::new(&args.path);
+        let path = Path::new(&expanded);
         if path.exists() {
             return Err(ToolError::Msg(format!(
                 "File '{}' already exists. Use edit for targeted changes, or delete and recreate if a full rewrite is needed.",
-                args.path
+                expanded
             )));
         }
         if let Some(parent) = path.parent() {
@@ -70,6 +71,6 @@ impl Tool for WriteTool {
             )));
         }
         tokio::fs::write(path, &args.content).await?;
-        Ok(format!("Written {} bytes to {}", bytes, args.path))
+        Ok(format!("Written {} bytes to {}", bytes, expanded))
     }
 }

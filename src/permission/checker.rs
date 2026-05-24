@@ -216,15 +216,17 @@ impl PermissionChecker {
             return CheckResult::Allowed;
         }
 
-        if self.is_session_allowed(tool, path) {
+        let expanded = crate::fs::expand_tilde(path);
+
+        if self.is_session_allowed(tool, &expanded) {
             return CheckResult::Allowed;
         }
 
-        let abs_path = resolve_absolute(path, &self.working_dir);
+        let abs_path = resolve_absolute(&expanded, &self.working_dir);
         let mut matched: SmallVec<[Action; 4]> = SmallVec::new();
         if let Some(rules) = self.rules.get(tool) {
             for (pattern, action) in rules {
-                if pattern.matches(&abs_path) || pattern.matches(path) {
+                if pattern.matches(&abs_path) || pattern.matches(&expanded) {
                     matched.push(*action);
                 }
             }
@@ -272,8 +274,8 @@ impl PermissionChecker {
         };
 
         if action != Action::Deny {
-            self.track_doom_loop(tool, path);
-            if self.is_doom_loop(tool, path) {
+            self.track_doom_loop(tool, &expanded);
+            if self.is_doom_loop(tool, &expanded) {
                 match self.doom_loop_action {
                     Action::Deny => {
                         return CheckResult::Denied(
@@ -371,7 +373,8 @@ impl PermissionChecker {
 }
 
 fn resolve_absolute(path: &str, working_dir: &str) -> String {
-    let p = Path::new(path);
+    let expanded = crate::fs::expand_tilde(path);
+    let p = Path::new(&expanded);
     if p.is_absolute() {
         p.to_string_lossy().to_string()
     } else {

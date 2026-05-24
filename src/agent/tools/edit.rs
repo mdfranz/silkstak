@@ -216,11 +216,12 @@ impl Tool for EditTool {
     }
 
     async fn call(&self, args: EditArgs) -> Result<String, ToolError> {
-        check_perm_path(&self.permission, &self.ask_tx, "edit", &args.path).await?;
+        let path = crate::fs::expand_tilde(&args.path);
+        check_perm_path(&self.permission, &self.ask_tx, "edit", &path).await?;
 
         let blocks = parse_blocks(&args.block)?;
 
-        let bytes = tokio::fs::read(&args.path).await?;
+        let bytes = tokio::fs::read(&path).await?;
         let has_crlf = bytes.windows(2).any(|w| w == b"\r\n");
         let content = String::from_utf8_lossy(&bytes).replace("\r\n", "\n");
 
@@ -268,7 +269,7 @@ impl Tool for EditTool {
                         return Err(ToolError::Msg(format!(
                             "{label}search text matched {} times in {}:\n{}\n\nAdd more surrounding context to the SEARCH block to make it unique.",
                             count,
-                            args.path,
+                            path,
                             match_info.join("\n"),
                         )));
                     }
@@ -298,7 +299,7 @@ impl Tool for EditTool {
                 MatchResult::FuzzySuggest(line, sim, preview) => {
                     return Err(ToolError::Msg(format!(
                         "{label}search text not found in '{}'. Closest match at line {}, {:.0}% similar:\n  {}\n\nRead the file around that area, copy the exact text, and retry the edit.",
-                        args.path,
+                        path,
                         line,
                         sim * 100.0,
                         preview,
@@ -307,7 +308,7 @@ impl Tool for EditTool {
                 MatchResult::NotFound => {
                     return Err(ToolError::Msg(format!(
                         "{label}search text not found in '{}'.\nRead the file and copy the exact text for the SEARCH block, ensuring whitespace and indentation match.",
-                        args.path,
+                        path,
                     )));
                 }
             }
@@ -338,9 +339,9 @@ impl Tool for EditTool {
             modified
         };
 
-        tokio::fs::write(&args.path, &output).await?;
+        tokio::fs::write(&path, &output).await?;
 
-        let mut result = format!("Applied {} edit(s) to {}", blocks.len(), args.path);
+        let mut result = format!("Applied {} edit(s) to {}", blocks.len(), path);
         for note in &notes {
             result.push_str(&format!("\n  Note: {}", note));
         }

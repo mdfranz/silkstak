@@ -80,7 +80,7 @@ impl Tool for GrepTool {
         let re = Regex::new(&args.pattern)
             .map_err(|e| ToolError::Msg(format!("Invalid regex pattern: {}", e)))?;
 
-        let search_path = args.path.as_deref().unwrap_or(".");
+        let search_path = crate::fs::expand_tilde(args.path.as_deref().unwrap_or("."));
         let context = args.context_lines.unwrap_or(0);
 
         let include_re = args.include.as_ref().map(|g| {
@@ -88,7 +88,7 @@ impl Tool for GrepTool {
             Regex::new(&pattern).unwrap_or_else(|_| Regex::new(".*").unwrap())
         });
 
-        let walker = WalkBuilder::new(search_path)
+        let walker = WalkBuilder::new(&search_path)
             .git_ignore(true)
             .git_global(true)
             .git_exclude(true)

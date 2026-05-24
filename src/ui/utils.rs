@@ -99,7 +99,8 @@ pub(crate) fn suggest_pattern(tool: &str, input: &str) -> String {
             format!("{} *", first)
         }
         "read" | "write" | "edit" | "list_dir" => {
-            let path = std::path::Path::new(input);
+            let expanded = crate::fs::expand_tilde(input);
+            let path = std::path::Path::new(&expanded);
             let parent = path
                 .parent()
                 .map(|p| p.to_string_lossy())
