@@ -322,7 +322,7 @@ impl Mem {
             };
             for e in rd.flatten() {
                 let path = e.path();
-                if !path.extension().is_some_and(|x| x == "md") {
+                if path.extension().is_none_or(|x| x != "md") {
                     continue;
                 }
                 let name = path.file_name().and_then(|s| s.to_str()).unwrap_or("");
@@ -367,11 +367,11 @@ impl Mem {
                 for &i in &hit_lines {
                     let lo = i.saturating_sub(CONTEXT);
                     let hi = (i + CONTEXT).min(lines.len().saturating_sub(1));
-                    if let Some(w) = windows.last_mut() {
-                        if lo <= w.1 + 1 {
-                            w.1 = w.1.max(hi);
-                            continue;
-                        }
+                    if let Some(w) = windows.last_mut()
+                        && lo <= w.1 + 1
+                    {
+                        w.1 = w.1.max(hi);
+                        continue;
                     }
                     if windows.len() >= MAX_BLOCKS {
                         break;
@@ -540,6 +540,23 @@ impl SearchResults {
         }
         truncate_marked(out, max_bytes)
     }
+}
+
+/// Heading for `append_daily`; it already prefixes "### HH:MM — ", so add only
+/// the count suffix. `count` is how many messages this compaction summarized.
+pub fn compaction_heading(count: Option<usize>) -> String {
+    match count {
+        Some(n) => format!("compaction summary ({n} msgs)"),
+        None => "compaction summary".to_string(),
+    }
+}
+
+/// Persist a compaction summary to today's daily log. Call before
+/// `Session::compress` so the summary survives compaction deterministically,
+/// rather than depending on the model to write it. `count` is the number of
+/// messages this compaction summarized (Session's `first_kept_index`).
+pub fn flush_compaction_summary(mem: &Mem, summary: &str, count: Option<usize>) {
+    let _ = mem.append_daily(&compaction_heading(count), summary);
 }
 
 // ---------------------------------------------------------------------------

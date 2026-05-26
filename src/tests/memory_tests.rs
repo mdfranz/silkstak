@@ -8,7 +8,10 @@
 //! can write files directly. Paths are built from the public `root`/`project`
 //! fields (Mem's own helpers are private).
 
-use crate::agent::memory::{MAX_INJECT_BYTES, Mem, WriteMode, WriteTarget, append_memory_block};
+use crate::agent::memory::{
+    MAX_INJECT_BYTES, Mem, WriteMode, WriteTarget, append_memory_block, compaction_heading,
+    flush_compaction_summary,
+};
 use std::fs;
 use std::path::PathBuf;
 
@@ -459,4 +462,37 @@ fn append_memory_block_rules() {
     let mut p = "BASE".to_string();
     append_memory_block(&mut p, Some("<memory>x</memory>"));
     assert_eq!(p, "BASE\n\n---\n\n<memory>x</memory>");
+}
+
+// ---- compaction flush -----------------------------------------------------
+
+#[test]
+fn flush_compaction_summary_persists_to_today() {
+    let m = fresh("flush");
+    flush_compaction_summary(&m, "did X and Y", Some(12));
+    let today = fs::read_to_string(daily(&m, &m.today)).unwrap();
+    assert!(today.contains("compaction summary (12 msgs)"));
+    assert!(today.contains("did X and Y"));
+    // today's log is injected, so the summary also appears in the context block
+    assert!(m.context_block().unwrap().contains("did X and Y"));
+    cleanup(&m);
+}
+
+#[test]
+fn compaction_heading_with_and_without_count() {
+    assert_eq!(compaction_heading(Some(8)), "compaction summary (8 msgs)");
+    assert_eq!(compaction_heading(None), "compaction summary");
+}
+
+#[test]
+fn multiple_compactions_stay_separated_and_ordered() {
+    let m = fresh("multi");
+    flush_compaction_summary(&m, "first summary", Some(10));
+    flush_compaction_summary(&m, "second summary", Some(7));
+    let log = fs::read_to_string(daily(&m, &m.today)).unwrap();
+    // ordered by append time, kept as two distinct heading sections
+    assert!(log.find("first summary").unwrap() < log.find("second summary").unwrap());
+    assert!(log.find("(10 msgs)").unwrap() < log.find("(7 msgs)").unwrap());
+    assert_eq!(log.matches("compaction summary (").count(), 2);
+    cleanup(&m);
 }
