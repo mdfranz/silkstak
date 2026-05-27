@@ -26,6 +26,7 @@ const COMMANDS: &[&str] = &[
     "/history",
     "/regen-prompts",
     "/regen-themes",
+    "/editsys",
     "/quit",
     "/exit",
     "/clear",

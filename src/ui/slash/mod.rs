@@ -275,7 +275,7 @@ pub async fn handle_slash(
         "/prompt" | "/theme" | "/regen-prompts" | "/regen-themes" => {
             content::handle(&parts, &mut ctx).await
         }
-        "/reasoning" | "/thinking" | "/mode" | "/toggle" | "/mcp" => {
+        "/reasoning" | "/thinking" | "/mode" | "/toggle" | "/mcp" | "/editsys" => {
             settings::handle(&parts, &mut ctx).await
         }
         "/sessions" | "/clear" | "/new" | "/undo" | "/retry" | "/quit" | "/exit" | "/history" => {

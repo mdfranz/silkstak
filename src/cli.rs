@@ -2,6 +2,7 @@ use clap::Parser;
 use compact_str::CompactString;
 
 use crate::config;
+use crate::config::types::EditSystem;
 
 #[derive(Parser, Debug)]
 #[command(name = "zerostack", version, about = "Minimal coding agent")]
@@ -87,6 +88,12 @@ pub struct Cli {
         help = "Shell binary to use for bash tool (default: bash)"
     )]
     pub shell: Option<String>,
+
+    #[arg(
+        long = "edit-system",
+        help = "Edit system (similarity or hashedit). Default: similarity"
+    )]
+    pub edit_system: Option<String>,
 
     #[arg(
         long = "no-context-files",
@@ -205,6 +212,14 @@ impl Cli {
             .clone()
             .or_else(|| cfg.shell.clone())
             .unwrap_or_else(|| "bash".to_string())
+    }
+
+    pub fn resolve_edit_system(&self, cfg: &config::Config) -> EditSystem {
+        self.edit_system
+            .as_deref()
+            .and_then(|s| s.parse().ok())
+            .or(cfg.edit_system)
+            .unwrap_or_default()
     }
 
     #[cfg(feature = "git-worktree")]

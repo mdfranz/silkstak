@@ -96,6 +96,7 @@ context_window = 128000
 reserve_tokens = 16384
 keep_recent_tokens = 20000
 compact_enabled = true
+edit_system = "similarity"
 default_prompt = "code"
 default_permission_mode = "standard"
 show_tool_details = false
@@ -144,6 +145,7 @@ Accepted top-level keys:
 | `keep_recent_tokens`      | integer | Approximate recent-token budget kept verbatim during compaction. Default: `20000`.                                                                                          |
 | `max_text_file_size`      | integer | Maximum allowed file size in bytes for read/write tool operations. Default: `1048576` (1 MB).                                                                               |
 | `compact_enabled`         | boolean | Enable automatic conversation compaction. Default: `true`.                                                                                                                  |
+| `edit_system`             | string  | Edit system mode: `"similarity"` (SEARCH/REPLACE with fuzzy matching, default) or `"hashedit"` (CRC-32 tag-based CAS edits). See Edit System Modes below.                     |
 | `custom_providers`        | object  | Map of provider aliases to `{ "provider_type", "base_url", "api_key_env", "api_style", "headers", "danger_accept_invalid_certs", "timeout_secs" }`. `provider_type` must resolve to a built-in provider type; `api_key_env` is optional. For OpenAI providers, `api_style` selects `"responses"` or `"completions"`, `headers` sets custom HTTP headers (values support `${ENV_VAR}` expansion), and `timeout_secs` overrides the HTTP timeout. `danger_accept_invalid_certs` disables TLS verification. See the OpenAI API styles section below. |
 | `permission`              | object  | Permission rules using glob patterns; see the permission config notes below.                                |
 | `permission-regex`        | object  | Same structure as `permission` but patterns are interpreted as regex instead of glob.                       |
@@ -388,3 +390,41 @@ All top-level keys use kebab-case when they contain hyphens (e.g.
 `permission-allow`, `allow-all-mcp-calls`). Simple keys use the same name as
 their JSON counterpart. Quoted keys (`"*"`, `"**"`) are required when the key
 contains special characters like `*` or `/`.
+
+## Edit System Modes
+
+zerostack supports two edit systems, selectable via `edit_system` config key,
+`--edit-system` CLI flag, or `/editsys` slash command:
+
+### `similarity` (default)
+
+The classic aider-style SEARCH/REPLACE format. The LLM copies exact text from
+read output into `<<<<<<< SEARCH` blocks and provides replacements in
+`>>>>>>> REPLACE` blocks. Falls back to whitespace normalization and fuzzy
+matching when the exact text doesn't match.
+
+```
+edit_system = "similarity"
+```
+
+### `hashedit`
+
+Tag-based edits using CRC-32 line hashes and file-level CAS (check-and-set)
+tokens. The read tool annotates each line with an 8-char hex CRC-32 tag (e.g.
+`"  10|f1e2d3c4 int count = 10;"`) and a file-level CRC header. The edit tool
+receives tagged lines from the read output and provides only the replacement
+text — no old-text reproduction needed.
+
+Key advantages:
+- **Token-efficient**: No old-text reproduction (significant savings for
+  deletions and large edits)
+- **CAS-guarded**: File-level CRC prevents applying edits to stale content
+- **Reliable**: Per-line tag validation catches content mismatches
+
+```
+edit_system = "hashedit"
+```
+
+Switching between modes is immediate and does not require agent restart.
+The `/editsys` `similarity` and `/editsys` `hashedit` slash commands
+provide the same functionality at runtime.

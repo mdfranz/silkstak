@@ -56,6 +56,9 @@ All slash commands are available from the TUI input prompt.
 | ------- | ----------- |
 | `/compress [instructions]` | Compress conversation history to free context window space. |
 | `/compact` | Alias for `/compress`. |
+| `/editsys` | Show the current edit system mode (similarity or hashedit). |
+| `/editsys similarity` | Use SEARCH/REPLACE with fuzzy matching for edits (default). |
+| `/editsys hashedit` | Use CRC-32 tag-based edits (token-efficient, CAS-guarded). |
 | `/reasoning` | Toggle LLM reasoning on/off (requires model support). |
 | `/thinking` | Alias for `/reasoning`. |
 | `/toggle` | Show available toggleable features. |

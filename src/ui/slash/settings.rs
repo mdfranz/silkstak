@@ -1,3 +1,5 @@
+use crate::agent::tools;
+use crate::config::types::EditSystem;
 use crate::permission::SecurityMode;
 use crate::ui::slash::{SlashCtx, write_error, write_ok, write_result};
 
@@ -6,6 +8,7 @@ pub async fn handle(parts: &[&str], ctx: &mut SlashCtx<'_>) -> anyhow::Result<()
         "/reasoning" | "/thinking" => handle_reasoning(parts, ctx).await,
         "/mode" => handle_mode(parts, ctx).await,
         "/toggle" => handle_toggle(parts, ctx).await,
+        "/editsys" => handle_editsys(parts, ctx).await,
         #[cfg(feature = "mcp")]
         "/mcp" => handle_mcp(parts, ctx).await,
         #[cfg(not(feature = "mcp"))]
@@ -122,6 +125,28 @@ async fn handle_toggle(parts: &[&str], ctx: &mut SlashCtx<'_>) -> anyhow::Result
                 ),
             );
         }
+    }
+    Ok(())
+}
+
+async fn handle_editsys(parts: &[&str], ctx: &mut SlashCtx<'_>) -> anyhow::Result<()> {
+    let current = tools::edit_system();
+    if parts.len() < 2 {
+        write_ok(ctx.renderer, format!("edit system: {}", current));
+        write_result(ctx.renderer, "  /editsys similarity   SEARCH/REPLACE with fuzzy matching");
+        write_result(ctx.renderer, "  /editsys hashedit     tag-based (CRC-32 line hashes)");
+        return Ok(());
+    }
+    match parts[1] {
+        "similarity" => {
+            tools::set_edit_system(EditSystem::Similarity);
+            write_ok(ctx.renderer, "edit system: similarity (SEARCH/REPLACE)");
+        }
+        "hashedit" => {
+            tools::set_edit_system(EditSystem::Hashedit);
+            write_ok(ctx.renderer, "edit system: hashedit (tag-based)");
+        }
+        _ => write_error(ctx.renderer, format!("unknown: '{}' (similarity|hashedit)", parts[1])),
     }
     Ok(())
 }

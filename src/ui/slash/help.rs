@@ -63,6 +63,10 @@ pub fn handle(_parts: &[&str], ctx: &mut SlashCtx<'_>) {
         ctx.renderer,
         "  /compress [instr]      compress with custom instructions",
     );
+    write_result(
+        ctx.renderer,
+        "  /editsys [mode]        edit system (similarity | hashedit)",
+    );
     #[cfg(feature = "loop")]
     {
         write_result(

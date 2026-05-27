@@ -4,11 +4,26 @@ mod find_files;
 mod grep;
 mod list_dir;
 mod normalize;
-mod read;
+pub(crate) mod read;
 mod todo;
 mod write;
+pub(crate) mod crc;
 
 pub(crate) use normalize::{levenshtein_similarity, normalize_whitespace};
+
+use std::sync::Mutex;
+
+use crate::config::types::EditSystem;
+
+static EDIT_SYSTEM: Mutex<EditSystem> = Mutex::new(EditSystem::Similarity);
+
+pub(crate) fn set_edit_system(es: EditSystem) {
+    *EDIT_SYSTEM.lock().unwrap_or_else(|e| e.into_inner()) = es;
+}
+
+pub(crate) fn edit_system() -> EditSystem {
+    *EDIT_SYSTEM.lock().unwrap_or_else(|e| e.into_inner())
+}
 
 pub use bash::BashTool;
 pub use edit::EditTool;
@@ -68,13 +83,25 @@ pub struct WriteArgs {
 #[derive(Deserialize)]
 pub struct EditArgs {
     pub path: String,
-    pub block: String,
+    #[serde(default)]
+    pub block: Option<String>,
+    #[serde(default)]
+    pub file_crc: Option<String>,
+    #[serde(default)]
+    pub edits: Option<Vec<EditOp>>,
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct EditBlock {
     pub search: String,
     pub replace: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub(crate) struct EditOp {
+    pub line: Option<String>,
+    pub lines: Option<String>,
+    pub text: String,
 }
 
 #[derive(Deserialize)]

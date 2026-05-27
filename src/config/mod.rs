@@ -96,6 +96,8 @@ pub struct Config {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub acp_port: Option<u16>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub edit_system: Option<types::EditSystem>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub colors: Option<types::ColorsConfig>,
 }
 

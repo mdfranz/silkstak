@@ -23,6 +23,7 @@ static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 use clap::Parser;
 use session::MessageRole;
 
+use crate::agent::tools;
 use crate::permission::SecurityMode;
 use crate::permission::ask::AskSender;
 use crate::permission::checker::{PermCheck, PermissionChecker};
@@ -161,6 +162,8 @@ async fn main() -> anyhow::Result<()> {
 
     let sandbox =
         sandbox::Sandbox::new(cli.resolve_sandbox(&cfg)).with_shell(&cli.resolve_shell(&cfg));
+    let edit_system = cli.resolve_edit_system(&cfg);
+    tools::set_edit_system(edit_system);
     let (permission, ask_tx, ask_rx) = build_permission_checker(&cli, &cfg);
 
     if let Some(perm) = &permission {
@@ -279,6 +282,7 @@ fn print_config(cli: &cli::Cli, cfg: &config::Config) {
     let no_context_files = cli.resolve_no_context_files(cfg);
     let sandbox = cli.resolve_sandbox(cfg);
     let shell = cli.resolve_shell(cfg);
+    let edit_system = cli.resolve_edit_system(cfg);
     let compact = cfg.resolve_compact_enabled();
 
     let mode = if cli.yolo || cfg.yolo.unwrap_or(false) {
@@ -325,6 +329,7 @@ fn print_config(cli: &cli::Cli, cfg: &config::Config) {
         &[
             ("permission-mode", mode.to_string()),
             ("shell", shell.to_string()),
+            ("edit-system", edit_system.to_string()),
             ("sandbox", sandbox.to_string()),
             ("no-tools", no_tools.to_string()),
             ("no-context-files", no_context_files.to_string()),
