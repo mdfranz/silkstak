@@ -163,7 +163,7 @@ Accepted top-level keys:
 | `sandbox`                 | boolean | Run bash commands in the bubblewrap sandbox. Default: `false`.                                                                                                              |
 | `default_permission_mode` | string  | Permission mode when no mode boolean/CLI flag is set. Accepts: `standard` (default), `restrictive`, `readonly`, `guarded`, `yolo`.                                          |
 | `show_tool_details`       | boolean | Show tool-result previews in the TUI. Default: `false`.                                                                                                                     |
-| `default_prompt`          | string  | Prompt name to activate on startup. Default: `code`.                                                                                                                        |
+| `default_prompt`          | string  | Prompt name to activate on startup. Default: `code`. If the prompt file has a `%%mode=<mode>` first-line directive, the security mode is set automatically (see Prompt directives below). |
 | `editor`                  | string  | Editor command for `Ctrl+G` (default: `$EDITOR` env var, then `editor`, then `nano`).                                                                                        |
 | `api_keys`                | object  | Map of provider names to API keys (e.g. `"openai": "sk-..."`). Used as fallback when the corresponding env var is not set.                                                   |
 | `quick_models`            | object  | Map of quick-model names to `{ "provider", "model" }`. Can be switched with `/models <name>` or `--quick-model=<name>`.                                                      |
@@ -433,3 +433,42 @@ edit_system = "hashedit"
 Switching between modes is immediate and does not require agent restart.
 The `/editsys` `similarity` and `/editsys` `hashedit` slash commands
 provide the same functionality at runtime.
+
+## Prompt directives
+
+Custom prompt `.md` files may include a `%%mode=<mode>` directive on the
+**first line** to automatically switch the security mode when the prompt
+is activated (via `/prompt <name>` or as the `default_prompt`).
+
+Valid modes: `standard`, `restrictive`, `readonly`, `guarded`, `yolo`.
+
+Use `%%mode=last_user_mode` to keep (or restore) the mode the user last
+set explicitly via `/mode` or startup config — useful when a prompt wants
+to avoid overriding the user's chosen mode.
+
+The directive line is stripped from the prompt content before it reaches
+the agent.
+
+Example `ask.md`:
+
+```markdown
+%%mode=readonly
+
+## Read-Only Mode
+
+You are in read-only mode. Only read files and explore.
+```
+
+Example `code.md` that defers to the user's mode:
+
+```markdown
+%%mode=last_user_mode
+
+## Coding Mode
+
+Write well-tested code. Follow project conventions.
+```
+
+The mode change is applied when the prompt is activated and persists
+until changed again by `/mode`, another prompt directive, or a restart.
+The status bar shows `| mode:<name>` when the mode is not `standard`.

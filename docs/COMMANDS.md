@@ -38,13 +38,34 @@ All slash commands are available from the TUI input prompt.
 | `/mode guarded` | Allow reads; ask for writes, edits, bash, and everything else. Config rules apply. |
 | `/mode yolo` | Allow everything; ask for destructive bash commands. Config rules apply. |
 
+Prompts can set the security mode automatically via `%%mode=<mode>` on
+the first line. When a prompt with `%%mode=last_user_mode` is activated,
+the mode reverts to whatever was last set explicitly by `/mode` or
+startup config. See Prompts & Themes below.
+
 ## Prompts & Themes
 
 | Command | Description |
 | ------- | ----------- |
 | `/prompt` | List available prompts. |
-| `/prompt <name>` | Activate a named prompt. |
+| `/prompt <name>` | Activate a named prompt. Also applies `%%mode=` from the prompt file if present (see below). |
 | `/prompt default` | Clear the active prompt. |
+
+Prompts may include a `%%mode=<mode>` directive on the **first line** to
+automatically switch the security mode when activated. Valid modes:
+`standard`, `restrictive`, `readonly`, `guarded`, `yolo`. Use
+`%%mode=last_user_mode` to restore the mode the user last set via `/mode`
+or startup config. The directive line is stripped from the prompt content
+before it reaches the agent.
+
+Example `ask.md`:
+```markdown
+%%mode=readonly
+
+## Read-Only Mode
+
+You are in read-only mode. Only read files and explore.
+```
 | `/theme` | List available themes. |
 | `/theme <name>` | Activate a named theme. |
 | `/theme default` | Clear the active theme (use config colors). |

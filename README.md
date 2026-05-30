@@ -115,6 +115,13 @@ Built-in prompts:
 You can also create custom prompts by placing markdown files in
 `$XDG_CONFIG_HOME/zerostack/prompts/` and referencing them by name.
 
+Custom prompts can set the security mode automatically by adding
+`%%mode=<mode>` as the **first line** of the `.md` file (e.g.
+`%%mode=readonly`). Valid modes: `standard`, `restrictive`, `readonly`,
+`guarded`, `yolo`. Use `%%mode=last_user_mode` to keep the mode the user
+last set via `/mode` or startup config. The directive line is stripped
+from the prompt content before it reaches the agent.
+
 Additionally, the agent automatically loads `AGENTS.md` or `CLAUDE.md` from the
 project root or any ancestor directory, injecting their contents into the
 system prompt. Use `-n` / `--no-context-files` to disable this.
