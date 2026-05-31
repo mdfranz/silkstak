@@ -260,7 +260,10 @@ pub async fn run_interactive(
         renderer.write_line("  Slash Commands:", C_TOOL)?;
         renderer.write_line("    /model        Switch model", Color::White)?;
         renderer.write_line("    /prompt       List / activate prompts", Color::White)?;
-        renderer.write_line("    .autoconfig        Switches to auto-configurator", Color::White)?;
+        renderer.write_line(
+            "    .autoconfig        Switches to auto-configurator",
+            Color::White,
+        )?;
         renderer.write_line("    /mode         Change security mode", Color::White)?;
         renderer.write_line("    /clear        Clear session", Color::White)?;
         renderer.write_line("    /undo         Undo last exchange", Color::White)?;
@@ -272,7 +275,10 @@ pub async fn run_interactive(
         renderer.write_line("    Ctrl+H     Launch lazygit", Color::White)?;
         renderer.write_line("    Ctrl+S     Save session", Color::White)?;
         renderer.write_line("    Tab        File picker / auto-complete", Color::White)?;
-        renderer.write_line("  Website: https://gi-dellav.github.io/zerostack/", Color::White)?;
+        renderer.write_line(
+            "  Website: https://gi-dellav.github.io/zerostack/",
+            Color::White,
+        )?;
         renderer.write_line("", Color::White)?;
         renderer.write_line("──────────────────────────────────────────", Color::Cyan)?;
         renderer.write_line("", Color::White)?;

@@ -231,10 +231,10 @@ fn context_block_truncates_cjk_without_panic() {
 #[test]
 fn search_returns_surrounding_context_and_merges() {
     let m = fresh("ctx");
-    // match on the "jose" line; the reason is on the next line and must appear
+    // match on the "jose" line; with ±3 context "unrelated tail" is far enough
     m.write(
         WriteTarget::Note,
-        "intro\nblah\nwe chose jose\nbecause edge is incompatible\nunrelated tail",
+        "intro\na1\na2\na3\nblah\nwe chose jose\nbecause edge is incompatible\nb1\nb2\nb3\nunrelated tail",
         WriteMode::Overwrite,
         Some("auth"),
     )
@@ -247,8 +247,8 @@ fn search_returns_surrounding_context_and_merges() {
         .unwrap();
     assert!(e.body.contains("we chose jose"));
     assert!(e.body.contains("because edge is incompatible")); // +1 line after the match
-    assert!(e.body.contains("blah")); // -1 line before the match
-    assert!(!e.body.contains("unrelated tail")); // outside the context window
+    assert!(e.body.contains("blah")); // -1 line before the match, still near enough
+    assert!(!e.body.contains("unrelated tail")); // outside the ±3 context window
     assert!(!e.filename_only); // this is a content hit
     cleanup(&m);
 }
@@ -314,9 +314,9 @@ fn search_is_literal_not_regex() {
 #[test]
 fn search_caps_at_max_blocks() {
     let m = fresh("cap");
-    // 5 well-separated matches (5 lines apart so windows don't merge) -> cap at 3
-    let body = (0..5)
-        .map(|i| format!("hit{i}\na\nb\nc\nd"))
+    // 7 well-separated matches (8-line spacing so ±3 context windows don't merge) -> cap at 5
+    let body = (0..7)
+        .map(|i| format!("hit{i}\na\nb\nc\nd\ne\nf\ng"))
         .collect::<Vec<_>>()
         .join("\n");
     m.write(WriteTarget::Note, &body, WriteMode::Overwrite, Some("many"))
@@ -327,8 +327,14 @@ fn search_caps_at_max_blocks() {
         .into_iter()
         .find(|h| h.path.to_string_lossy().contains("many"))
         .unwrap();
-    assert!(e.body.contains("hit0") && e.body.contains("hit1") && e.body.contains("hit2"));
-    assert!(!e.body.contains("hit3") && !e.body.contains("hit4")); // capped at MAX_BLOCKS = 3
+    assert!(
+        e.body.contains("hit0")
+            && e.body.contains("hit1")
+            && e.body.contains("hit2")
+            && e.body.contains("hit3")
+            && e.body.contains("hit4")
+    );
+    assert!(!e.body.contains("hit5") && !e.body.contains("hit6")); // capped at MAX_BLOCKS = 5
     cleanup(&m);
 }
 

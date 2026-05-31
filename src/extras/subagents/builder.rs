@@ -28,32 +28,31 @@ fn build_explore_agent_inner<M: CompletionModel + 'static>(
         .build()
 }
 
-pub(crate) async fn build_explore_agent(
-    model: AnyModel,
-    max_turns: usize,
-) -> AnyAgent {
+pub(crate) async fn build_explore_agent(model: AnyModel, max_turns: usize) -> AnyAgent {
     // Use a reasonable default file size for subagent reads
     let max_text_file_size = 10 * 1024 * 1024;
     match model {
-        AnyModel::OpenRouter(m) => AnyAgent::OpenRouter(build_explore_agent_inner(
-            m, max_turns, max_text_file_size,
-        )),
+        AnyModel::OpenRouter(m) => {
+            AnyAgent::OpenRouter(build_explore_agent_inner(m, max_turns, max_text_file_size))
+        }
         AnyModel::OpenAI(m) => AnyAgent::OpenAI(match m {
-            OpenAiModel::Responses(m) => OpenAiAgent::Responses(build_explore_agent_inner(
-                m, max_turns, max_text_file_size,
-            )),
+            OpenAiModel::Responses(m) => {
+                OpenAiAgent::Responses(build_explore_agent_inner(m, max_turns, max_text_file_size))
+            }
             OpenAiModel::Completions(m) => OpenAiAgent::Completions(build_explore_agent_inner(
-                m, max_turns, max_text_file_size,
+                m,
+                max_turns,
+                max_text_file_size,
             )),
         }),
-        AnyModel::Anthropic(m) => AnyAgent::Anthropic(build_explore_agent_inner(
-            m, max_turns, max_text_file_size,
-        )),
-        AnyModel::Gemini(m) => AnyAgent::Gemini(build_explore_agent_inner(
-            m, max_turns, max_text_file_size,
-        )),
-        AnyModel::Ollama(m) => AnyAgent::Ollama(build_explore_agent_inner(
-            m, max_turns, max_text_file_size,
-        )),
+        AnyModel::Anthropic(m) => {
+            AnyAgent::Anthropic(build_explore_agent_inner(m, max_turns, max_text_file_size))
+        }
+        AnyModel::Gemini(m) => {
+            AnyAgent::Gemini(build_explore_agent_inner(m, max_turns, max_text_file_size))
+        }
+        AnyModel::Ollama(m) => {
+            AnyAgent::Ollama(build_explore_agent_inner(m, max_turns, max_text_file_size))
+        }
     }
 }

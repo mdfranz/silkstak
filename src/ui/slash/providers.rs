@@ -200,9 +200,8 @@ async fn handle_model_subagent(parts: &[&str], ctx: &mut SlashCtx<'_>) -> anyhow
     use crate::extras::subagents;
 
     if parts.len() < 2 {
-        let (provider_name, model_name) = subagents::with_config(|cfg| {
-            (cfg.client.provider_name(), cfg.model_name.clone())
-        });
+        let (provider_name, model_name) =
+            subagents::with_config(|cfg| (cfg.client.provider_name(), cfg.model_name.clone()));
         write_ok(
             ctx.renderer,
             format!("current subagent model: {} / {}", provider_name, model_name),
@@ -230,9 +229,8 @@ async fn handle_models_subagent(parts: &[&str], ctx: &mut SlashCtx<'_>) -> anyho
     sorted.sort();
 
     if parts.len() < 2 {
-        let (provider_name, model_name) = subagents::with_config(|cfg| {
-            (cfg.client.provider_name(), cfg.model_name.clone())
-        });
+        let (provider_name, model_name) =
+            subagents::with_config(|cfg| (cfg.client.provider_name(), cfg.model_name.clone()));
         if sorted.is_empty() {
             write_ok(
                 ctx.renderer,

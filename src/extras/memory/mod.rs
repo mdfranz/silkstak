@@ -13,7 +13,12 @@ use crate::permission::checker::PermCheck;
 
 /// Hard cap on injected/returned memory, protecting the context window. This is
 /// a token-budget guard, not a memory-usage one — files are expected to be small.
-pub const MAX_INJECT_BYTES: usize = 16 * 1024;
+pub const MAX_INJECT_BYTES: usize = 64 * 1024;
+
+/// Hard cap on content accepted by a single memory_write call. Longer content is
+/// truncated (with a warning in the return message) rather than rejected, so the
+/// model still gets something saved and can split oversized content across calls.
+pub const MAX_WRITE_BYTES: usize = 64 * 1024;
 
 /// Truncate a string to at most `max` bytes on a UTF-8 char boundary (plain
 /// `String::truncate` panics mid-character, e.g. on CJK), appending a marker.
@@ -44,11 +49,16 @@ pub fn append_memory_block(preamble: &mut String, memory: Option<&str>) {
 /// Filesystem-safe, collision-resistant slug for a project path:
 /// "<sanitized-basename>-<8 hex of full-path hash>". Two different absolute
 /// paths that share a basename still get distinct slugs.
+///
+/// Uses FNV-1a 64-bit (stable across all Rust versions and platforms) so slugs
+/// survive compiler upgrades.
 pub fn project_slug(path: &Path) -> String {
-    use std::hash::{Hash, Hasher};
-    let mut h = std::collections::hash_map::DefaultHasher::new();
-    path.hash(&mut h);
-    let short = h.finish() as u32;
+    let mut hash: u64 = 0xcbf29ce484222325; // FNV offset basis
+    for &byte in path.as_os_str().as_encoded_bytes() {
+        hash ^= byte as u64;
+        hash = hash.wrapping_mul(0x100000001b3); // FNV prime
+    }
+    let short = hash as u32;
     let base = path.file_name().and_then(|s| s.to_str()).unwrap_or("root");
     let mut slug: String = base
         .chars()
@@ -155,6 +165,17 @@ impl Mem {
         }
     }
 
+    fn truncate_to_bytes<'a>(s: &'a str, max: usize) -> &'a str {
+        if s.len() <= max {
+            return s;
+        }
+        let mut cut = max;
+        while cut > 0 && !s.is_char_boundary(cut) {
+            cut -= 1;
+        }
+        &s[..cut]
+    }
+
     pub fn write(
         &self,
         target: WriteTarget,
@@ -162,6 +183,8 @@ impl Mem {
         mode: WriteMode,
         name: Option<&str>,
     ) -> std::io::Result<String> {
+        let original_len = content.len();
+        let content = Self::truncate_to_bytes(content, MAX_WRITE_BYTES);
         let path = match target {
             WriteTarget::LongTerm => self.memory_md(),
             WriteTarget::Scratchpad => self.scratchpad(),
@@ -201,11 +224,14 @@ impl Mem {
                 fs::write(&path, prev)?;
             }
         }
-        Ok(format!(
-            "Wrote {} bytes to {}",
-            content.len(),
-            path.display()
-        ))
+        let mut msg = format!("Wrote {} bytes to {}", content.len(), path.display());
+        if original_len > content.len() {
+            msg.push_str(&format!(
+                " (truncated from {original_len} bytes to {} byte cap)",
+                MAX_WRITE_BYTES
+            ));
+        }
+        Ok(msg)
     }
 
     /// Append a timestamped entry to today's daily log. Used by the
@@ -299,8 +325,8 @@ impl Mem {
             })
             .collect();
 
-        const CONTEXT: usize = 1; // lines of context on each side of a match
-        const MAX_BLOCKS: usize = 3; // matched regions reported per file
+        const CONTEXT: usize = 3; // lines of context on each side of a match
+        const MAX_BLOCKS: usize = 5; // matched regions reported per file
 
         // Total matching lines per term, accumulated across every file — drives
         // the per-term counts shown in the summary line.
@@ -612,7 +638,7 @@ Prefer long_term for things that should always be remembered."
                 "type": "object",
                 "properties": {
                     "target":  { "type": "string", "description": "long_term, scratchpad, daily, or note" },
-                    "content": { "type": "string", "description": "Markdown content to store" },
+                    "content": { "type": "string", "description": "Markdown content to store (max 64KB; longer is truncated with a warning)" },
                     "mode":    { "type": "string", "description": "append (default) or overwrite" },
                     "name":    { "type": "string", "description": "filename stem, required for note" }
                 },

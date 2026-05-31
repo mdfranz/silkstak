@@ -10,3 +10,5 @@ mod input_tests;
 mod memory_tests;
 #[cfg(test)]
 mod picker_tests;
+#[cfg(all(test, feature = "subagents"))]
+mod subagents_tests;

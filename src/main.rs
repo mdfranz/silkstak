@@ -234,11 +234,7 @@ async fn main() -> anyhow::Result<()> {
             )?
         };
 
-        crate::extras::subagents::init(
-            sub_client,
-            sub_model.to_string(),
-            task_max_turns,
-        );
+        crate::extras::subagents::init(sub_client, sub_model.to_string(), task_max_turns);
     }
 
     #[cfg(feature = "acp")]
