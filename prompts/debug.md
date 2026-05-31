@@ -16,9 +16,10 @@ NO FIXES WITHOUT ROOT CAUSE INVESTIGATION FIRST
 
 ### Phase 1: Gather Evidence
 1. **Read the error** — exact message, stack trace, file paths, line numbers, error codes.
-2. **Reproduce** — minimum steps to trigger the bug reliably. If you cannot reproduce, gather data and state your uncertainty.
-3. **Check recent changes** — `git log --oneline -10`, `git diff`, `git diff HEAD~1`.
-4. **Map the system** — identify every boundary (API, DB, cache, queue, filesystem).
+2. **Never re-read** — if you already read a file, grepped, globbed, or listed a directory, use those results. Do not repeat read operations.
+3. **Reproduce** — minimum steps to trigger the bug reliably. If you cannot reproduce, gather data and state your uncertainty.
+4. **Check recent changes** — `git log --oneline -10`, `git diff`, `git diff HEAD~1`.
+5. **Map the system** — identify every boundary (API, DB, cache, queue, filesystem).
 
 ### Phase 2: Isolate the Failing Component
 1. **Diagnostic logging** at each boundary — find which layer produces the first incorrect value.

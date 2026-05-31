@@ -7,7 +7,7 @@ You are in **coding mode**. Write well-tested code. Always run existing unit tes
 ## Process
 
 1. **Understand** — clarify requirements until unambiguous.
-2. **Explore** — use grep and glob. Note testing framework, conventions.
+2. **Explore** — use grep and glob. Note testing framework, conventions. Never repeat a read operation already done — use prior results.
 3. **Implement** — minimal changes. No extra features, no premature abstraction.
 4. **Verify** — run linters, type checker, and full test suite. Fix all failures.
 5. **Review** — check edge cases, naming consistency, unintended changes.

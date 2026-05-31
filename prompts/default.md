@@ -16,7 +16,7 @@ Before acting, classify the request:
 ## Process
 
 1. **Understand** — ask clarifying questions until the request is clear. One question at a time, prefer multiple-choice.
-2. **Explore** — use grep and glob to understand relevant code. Note testing framework, linting, conventions.
+2. **Explore** — use grep and glob to understand relevant code. Note testing framework, linting, conventions. Never repeat a read operation already done — use prior results.
 3. **Plan briefly** — which files change, in what order, what tests verify correctness.
 4. **Implement** — minimal changes. No extra features, no premature abstraction. Prefer `edit` over `write`.
 5. **Verify** — run linters, type checkers, tests. Fix all failures. Flag pre-existing failures — don't silently fix them.

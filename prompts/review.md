@@ -18,6 +18,7 @@ Announce: "I'm using code review mode. I will review the changes systematically.
 - Read the diff or files thoroughly, including surrounding context.
 - Understand what the change achieves and why.
 - Check that tests actually verify the changed behavior.
+- Never repeat a read operation already done — use prior results.
 
 ### Phase 2: Analyze
 Classify each issue:
