@@ -668,6 +668,60 @@ pub async fn run_interactive(
                                         C_ERROR,
                                     )?;
                                 }
+                            } else if text.starts_with('!') {
+                                let cmd = text.strip_prefix('!').map(|s| s.trim()).unwrap_or("");
+                                if !cmd.is_empty() {
+                                    for line in text.lines() {
+                                        let safe_line = sanitize_output(line);
+                                        renderer.write_line(&format!("> {}", safe_line), Color::Green)?;
+                                    }
+                                    renderer.write_line("", Color::White)?;
+
+                                    let cmd_owned = cmd.to_string();
+                                    let output = tokio::task::spawn_blocking(move || {
+                                        std::process::Command::new("bash")
+                                            .arg("-c")
+                                            .arg(&cmd_owned)
+                                            .output()
+                                    })
+                                    .await
+                                    .map_err(|e| anyhow::anyhow!("spawn error: {}", e))?
+                                    .map_err(|e| anyhow::anyhow!("command error: {}", e))?;
+
+                                    let mut result = String::new();
+                                    if !output.stdout.is_empty() {
+                                        result.push_str(&String::from_utf8_lossy(&output.stdout));
+                                    }
+                                    if !output.stderr.is_empty() {
+                                        if !result.is_empty() {
+                                            result.push('\n');
+                                        }
+                                        result.push_str(&String::from_utf8_lossy(&output.stderr));
+                                    }
+                                    let result = result.trim().to_string();
+
+                                    for line in result.lines() {
+                                        let safe_line = sanitize_output(line);
+                                        renderer.write_line(
+                                            &safe_line,
+                                            if output.status.success() { C_AGENT } else { C_ERROR },
+                                        )?;
+                                    }
+                                    renderer.write_line("", Color::White)?;
+
+                                    session.add_message(MessageRole::User, &text);
+                                    session.add_message(MessageRole::Assistant, &result);
+                                    if !cli.no_session {
+                                        let _ = crate::session::chat_history::append_entry(
+                                            &crate::session::chat_history::ChatHistoryEntry {
+                                                content: text.to_string(),
+                                                timestamp: session.updated_at.clone(),
+                                            },
+                                        );
+                                    }
+                                } else {
+                                    renderer.write_line("error: empty command after '!'", C_ERROR)?;
+                                }
                             } else {
                                 for line in text.lines() {
                                     let safe_line = sanitize_output(line);

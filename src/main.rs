@@ -233,31 +233,67 @@ async fn main() -> anyhow::Result<()> {
     let completion_model = client.completion_model(model.to_string());
 
     if cli.print {
-        let agent = provider::build_agent(
-            completion_model,
-            &cli,
-            &cfg,
-            &context,
-            permission,
-            ask_tx,
-            sandbox.clone(),
-            true,
-            #[cfg(feature = "mcp")]
-            None,
-        )
-        .await;
         let msg = cli.message.join(" ");
-        let response = agent
-            .run_print(&msg, cli.resolve_max_agent_turns(&cfg))
-            .await?;
-        if !cli.no_session {
-            session.add_message(MessageRole::User, &msg);
-            session.add_message(MessageRole::Assistant, &response);
-            session::storage::save_session(&session)?;
-            let _ = session::chat_history::append_entry(&session::chat_history::ChatHistoryEntry {
-                content: msg,
-                timestamp: session.updated_at.clone(),
-            });
+        if msg.starts_with('!') {
+            let cmd = msg.strip_prefix('!').map(|s| s.trim()).unwrap_or("");
+            if !cmd.is_empty() {
+                let output = std::process::Command::new("bash")
+                    .arg("-c")
+                    .arg(cmd)
+                    .output()?;
+                let mut result = String::new();
+                if !output.stdout.is_empty() {
+                    result.push_str(&String::from_utf8_lossy(&output.stdout));
+                }
+                if !output.stderr.is_empty() {
+                    if !result.is_empty() {
+                        result.push('\n');
+                    }
+                    result.push_str(&String::from_utf8_lossy(&output.stderr));
+                }
+                let result = result.trim().to_string();
+                println!("{}", result);
+                if !cli.no_session {
+                    session.add_message(MessageRole::User, &msg);
+                    session.add_message(MessageRole::Assistant, &result);
+                    session::storage::save_session(&session)?;
+                    let _ = session::chat_history::append_entry(
+                        &session::chat_history::ChatHistoryEntry {
+                            content: msg,
+                            timestamp: session.updated_at.clone(),
+                        },
+                    );
+                }
+            } else {
+                eprintln!("error: empty command after '!'");
+            }
+        } else {
+            let agent = provider::build_agent(
+                completion_model,
+                &cli,
+                &cfg,
+                &context,
+                permission,
+                ask_tx,
+                sandbox.clone(),
+                true,
+                #[cfg(feature = "mcp")]
+                None,
+            )
+            .await;
+            let response = agent
+                .run_print(&msg, cli.resolve_max_agent_turns(&cfg))
+                .await?;
+            if !cli.no_session {
+                session.add_message(MessageRole::User, &msg);
+                session.add_message(MessageRole::Assistant, &response);
+                session::storage::save_session(&session)?;
+                let _ =
+                    session::chat_history::append_entry(&session::chat_history::ChatHistoryEntry {
+                        content: msg,
+                        timestamp: session.updated_at.clone(),
+                    });
+            }
         }
     } else {
         #[cfg(feature = "loop")]
