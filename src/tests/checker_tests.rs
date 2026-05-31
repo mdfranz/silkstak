@@ -18,6 +18,7 @@ fn make_checker(mode: SecurityMode) -> PermissionChecker {
     )
 }
 
+#[allow(dead_code)]
 fn make_checker_with_modes(mode: SecurityMode, modes: Option<Vec<String>>) -> PermissionChecker {
     PermissionChecker::new(
         &PermissionConfigs::default(),

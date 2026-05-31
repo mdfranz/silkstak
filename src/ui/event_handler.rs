@@ -19,20 +19,6 @@ use crate::ui::slash::handle_compress;
 
 use super::{C_AGENT, C_ERROR, C_TOOL, apply_current_prompt_mode};
 
-/// Lazily initialise the MCP client manager (connects only on first use).
-#[cfg(feature = "mcp")]
-pub async fn ensure_mcp_manager<'a>(
-    mcp: &'a mut Option<McpClientManager>,
-    cfg: &'a Config,
-) -> Option<&'a McpClientManager> {
-    if mcp.is_none()
-        && let Some(servers) = &cfg.mcp_servers
-    {
-        *mcp = Some(McpClientManager::connect_all(servers).await);
-    }
-    mcp.as_ref()
-}
-
 #[cfg(feature = "mcp")]
 #[allow(clippy::too_many_arguments)]
 pub async fn ensure_agent(
