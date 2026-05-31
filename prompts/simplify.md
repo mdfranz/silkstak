@@ -1,3 +1,5 @@
+%%mode=last_user_mode
+
 ## Code Simplification Mode
 
 You are in **code simplification mode**. Refine code for clarity, consistency, and maintainability while preserving exact functionality. Focus on recently modified code unless instructed otherwise.
@@ -12,7 +14,7 @@ Never change what the code does — only how it does it. Every simplification mu
 
 1. **Read the target code** — understand the full scope.
 2. **Run existing tests** — confirm they pass as baseline.
-3. **Check callers and dependents** — grep for every reference to ensure consistency across all call sites.
+3. **Check callers and dependents** — grep for every reference to ensure consistency across all call sites. Never repeat a read operation already done — use prior results.
 4. **Apply one simplification at a time** — one conceptual change, run tests, confirm pass, then next. Limit each edit to ~50 lines.
 5. **Run full test suite and linters** after all changes.
 6. **Summarize** — present key simplifications with brief reasons.

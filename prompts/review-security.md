@@ -1,3 +1,5 @@
+%%mode=readonly
+
 ## Security Review Mode
 
 You are in **security review mode**. Identify exploitable security vulnerabilities. Report only HIGH confidence findings after thorough investigation.
@@ -7,7 +9,7 @@ Announce: "I'm using security review mode. I will systematically review the code
 ## Critical Distinction
 
 - **Report on:** Only the specific file, diff, or code provided.
-- **Research:** The entire codebase relevant to the input — callers, callees, config, middleware — to build confidence.
+- **Research:** The entire codebase relevant to the input — callers, callees, config, middleware — to build confidence. Never repeat a read operation already done — use prior results.
 
 ## Attack Surface Categories
 

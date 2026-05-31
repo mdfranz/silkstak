@@ -1,3 +1,5 @@
+use crate::agent::tools;
+use crate::config::types::EditSystem;
 use crate::permission::SecurityMode;
 use crate::ui::slash::{SlashCtx, write_error, write_ok, write_result};
 
@@ -6,6 +8,7 @@ pub async fn handle(parts: &[&str], ctx: &mut SlashCtx<'_>) -> anyhow::Result<()
         "/reasoning" | "/thinking" => handle_reasoning(parts, ctx).await,
         "/mode" => handle_mode(parts, ctx).await,
         "/toggle" => handle_toggle(parts, ctx).await,
+        "/editsys" => handle_editsys(parts, ctx).await,
         #[cfg(feature = "mcp")]
         "/mcp" => handle_mcp(parts, ctx).await,
         #[cfg(not(feature = "mcp"))]
@@ -47,27 +50,29 @@ async fn handle_mode(parts: &[&str], ctx: &mut SlashCtx<'_>) -> anyhow::Result<(
         write_result(ctx.renderer, "");
         write_result(
             ctx.renderer,
-            "  /mode standard      use configured permission rules",
+            "  /mode standard      allow within CWD, ask for external",
+        );
+        write_result(ctx.renderer, "  /mode restrictive   ask for all operations");
+        write_result(
+            ctx.renderer,
+            "  /mode readonly      allow reads, deny everything else",
         );
         write_result(
             ctx.renderer,
-            "  /mode restrictive   default all tools to ask",
+            "  /mode guarded       allow reads, ask for everything else",
         );
         write_result(
             ctx.renderer,
-            "  /mode accept        auto-accept within working directory",
-        );
-        write_result(
-            ctx.renderer,
-            "  /mode yolo          auto-accept ALL operations",
+            "  /mode yolo          allow all, ask for destructive bash",
         );
         return Ok(());
     }
     match parts[1] {
         "standard" => set_mode(ctx, SecurityMode::Standard, "standard").await,
         "restrictive" => set_mode(ctx, SecurityMode::Restrictive, "restrictive").await,
-        "accept" => set_mode(ctx, SecurityMode::Accept, "accept (auto-allow within CWD)").await,
-        "yolo" => set_mode(ctx, SecurityMode::Yolo, "YOLO (all operations allowed)").await,
+        "readonly" => set_mode(ctx, SecurityMode::ReadOnly, "readonly").await,
+        "guarded" => set_mode(ctx, SecurityMode::Guarded, "guarded").await,
+        "yolo" => set_mode(ctx, SecurityMode::Yolo, "yolo").await,
         _ => write_error(ctx.renderer, format!("unknown mode: {}", parts[1])),
     }
     Ok(())
@@ -122,6 +127,37 @@ async fn handle_toggle(parts: &[&str], ctx: &mut SlashCtx<'_>) -> anyhow::Result
                 ),
             );
         }
+    }
+    Ok(())
+}
+
+async fn handle_editsys(parts: &[&str], ctx: &mut SlashCtx<'_>) -> anyhow::Result<()> {
+    let current = tools::edit_system();
+    if parts.len() < 2 {
+        write_ok(ctx.renderer, format!("edit system: {}", current));
+        write_result(
+            ctx.renderer,
+            "  /editsys similarity   SEARCH/REPLACE with fuzzy matching",
+        );
+        write_result(
+            ctx.renderer,
+            "  /editsys hashedit     tag-based (CRC-32 line hashes)",
+        );
+        return Ok(());
+    }
+    match parts[1] {
+        "similarity" => {
+            tools::set_edit_system(EditSystem::Similarity);
+            write_ok(ctx.renderer, "edit system: similarity (SEARCH/REPLACE)");
+        }
+        "hashedit" => {
+            tools::set_edit_system(EditSystem::Hashedit);
+            write_ok(ctx.renderer, "edit system: hashedit (tag-based)");
+        }
+        _ => write_error(
+            ctx.renderer,
+            format!("unknown: '{}' (similarity|hashedit)", parts[1]),
+        ),
     }
     Ok(())
 }

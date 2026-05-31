@@ -89,7 +89,10 @@ async fn handle_models(parts: &[&str], ctx: &mut SlashCtx<'_>) -> anyhow::Result
                 let q = &qm[name.as_str()];
                 write_result(
                     ctx.renderer,
-                    format!("  {}  ({} / {})", name, q.provider, q.model),
+                    format!(
+                        "  {}  ({} / {})  ${:.4}/M in  ${:.4}/M out",
+                        name, q.provider, q.model, q.input_token_cost, q.output_token_cost
+                    ),
                 );
             }
         }
@@ -116,11 +119,13 @@ async fn handle_models(parts: &[&str], ctx: &mut SlashCtx<'_>) -> anyhow::Result
             );
             ctx.session.provider = compact_str::CompactString::new(&q.provider);
             ctx.session.model = compact_str::CompactString::new(&q.model);
+            ctx.session.input_token_cost = q.input_token_cost;
+            ctx.session.output_token_cost = q.output_token_cost;
             write_ok(
                 ctx.renderer,
                 format!(
-                    "switched to quick model: {} ({} / {})",
-                    name, q.provider, q.model
+                    "switched to quick model: {} ({} / {})  ${:.4}/M in  ${:.4}/M out",
+                    name, q.provider, q.model, q.input_token_cost, q.output_token_cost
                 ),
             );
         } else {
@@ -138,27 +143,45 @@ async fn handle_models(parts: &[&str], ctx: &mut SlashCtx<'_>) -> anyhow::Result
 
 async fn handle_models_add(parts: &[&str], ctx: &mut SlashCtx<'_>) -> anyhow::Result<()> {
     if parts.len() < 3 {
-        write_ok(ctx.renderer, "usage: /models-add <name> <provider> <model>");
+        write_ok(
+            ctx.renderer,
+            "usage: /models-add <name> <provider> <model> [input_cost_per_M output_cost_per_M]",
+        );
         return Ok(());
     }
     let name = parts[1].trim().to_string();
     let rest = parts[2].trim();
-    let (provider, model) = match rest.split_once(' ') {
-        Some((p, m)) => (p.trim().to_string(), m.trim().to_string()),
+    let (provider, model, input_cost, output_cost) = match rest.split_once(' ') {
+        Some((p, m)) if parts.len() >= 5 => (
+            p.trim().to_string(),
+            m.trim().to_string(),
+            parts[3].trim().parse::<f64>().unwrap_or(0.0),
+            parts[4].trim().parse::<f64>().unwrap_or(0.0),
+        ),
+        Some((p, m)) => (p.trim().to_string(), m.trim().to_string(), 0.0, 0.0),
         None => {
-            write_ok(ctx.renderer, "usage: /models-add <name> <provider> <model>");
+            write_ok(
+                ctx.renderer,
+                "usage: /models-add <name> <provider> <model> [input_cost_per_M output_cost_per_M]",
+            );
             return Ok(());
         }
     };
     if name.is_empty() || provider.is_empty() || model.is_empty() {
-        write_ok(ctx.renderer, "usage: /models-add <name> <provider> <model>");
+        write_ok(
+            ctx.renderer,
+            "usage: /models-add <name> <provider> <model> [input_cost_per_M output_cost_per_M]",
+        );
         return Ok(());
     }
-    match config::save_quick_model(&name, &provider, &model) {
+    match config::save_quick_model(&name, &provider, &model, input_cost, output_cost) {
         Ok(()) => {
             write_ok(
                 ctx.renderer,
-                format!("saved quick model: {} ({} / {})", name, provider, model),
+                format!(
+                    "saved quick model: {} ({} / {})  ${}/M in  ${}/M out",
+                    name, provider, model, input_cost, output_cost
+                ),
             );
         }
         Err(e) => {

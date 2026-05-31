@@ -50,11 +50,46 @@ pub fn config_file_path() -> PathBuf {
     resolve_config_path()
 }
 
-pub fn quick_models_map(cfg: &Config) -> HashMap<String, QuickModelConfig> {
-    cfg.quick_models.clone().unwrap_or_default()
+fn default_quick_models() -> HashMap<String, QuickModelConfig> {
+    let mut map = HashMap::new();
+    map.insert(
+        "deepseek-v4-flash".to_string(),
+        QuickModelConfig {
+            provider: CompactString::new("openrouter"),
+            model: CompactString::new("deepseek/deepseek-v4-flash"),
+            input_token_cost: 0.0983,
+            output_token_cost: 0.1966,
+        },
+    );
+    map.insert(
+        "deepseek-v4-pro".to_string(),
+        QuickModelConfig {
+            provider: CompactString::new("openrouter"),
+            model: CompactString::new("deepseek/deepseek-v4-pro"),
+            input_token_cost: 0.435,
+            output_token_cost: 0.87,
+        },
+    );
+    map
 }
 
-pub fn save_quick_model(name: &str, provider: &str, model: &str) -> std::io::Result<()> {
+pub fn quick_models_map(cfg: &Config) -> HashMap<String, QuickModelConfig> {
+    let mut map = default_quick_models();
+    if let Some(user_models) = &cfg.quick_models {
+        for (k, v) in user_models {
+            map.insert(k.clone(), v.clone());
+        }
+    }
+    map
+}
+
+pub fn save_quick_model(
+    name: &str,
+    provider: &str,
+    model: &str,
+    input_token_cost: f64,
+    output_token_cost: f64,
+) -> std::io::Result<()> {
     let path = resolve_config_path();
     let mut cfg: Config = if path.exists() {
         let content = std::fs::read_to_string(&path).unwrap_or_default();
@@ -72,6 +107,8 @@ pub fn save_quick_model(name: &str, provider: &str, model: &str) -> std::io::Res
         QuickModelConfig {
             provider: CompactString::new(provider),
             model: CompactString::new(model),
+            input_token_cost,
+            output_token_cost,
         },
     );
 
@@ -89,6 +126,14 @@ pub fn save_quick_model(name: &str, provider: &str, model: &str) -> std::io::Res
     Ok(())
 }
 
+fn rich_default_config() -> Config {
+    let mut cfg = Config::default();
+    cfg.quick_models = Some(default_quick_models());
+    cfg.max_tokens = Some(8192);
+    cfg.context_window = Some(128_000);
+    cfg
+}
+
 pub fn load() -> Config {
     let path = resolve_config_path();
     #[allow(unused_mut)]
@@ -96,7 +141,7 @@ pub fn load() -> Config {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).ok();
         }
-        let default = Config::default();
+        let default = rich_default_config();
         if path.extension().and_then(|e| e.to_str()) == Some("toml")
             && let Ok(content) = toml::to_string(&default)
         {

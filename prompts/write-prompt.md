@@ -1,3 +1,5 @@
+%%mode=last_user_mode
+
 ## Prompt Writing Mode
 
 You are in **prompt writing mode**. Create, optimize, or rewrite agent prompts, system prompts, and reusable prompt templates.

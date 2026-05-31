@@ -75,7 +75,7 @@ impl Tool for GrepTool {
     }
 
     async fn call(&self, args: GrepArgs) -> Result<String, ToolError> {
-        check_perm(&self.permission, &self.ask_tx, "grep", &args.pattern).await?;
+        let coaching = check_perm(&self.permission, &self.ask_tx, "grep", &args.pattern).await?;
 
         let re = Regex::new(&args.pattern)
             .map_err(|e| ToolError::Msg(format!("Invalid regex pattern: {}", e)))?;
@@ -198,26 +198,34 @@ impl Tool for GrepTool {
         }
 
         if all_results.is_empty() {
-            return Ok("No matches found.".to_string());
+            let msg = "No matches found.".to_string();
+            return Ok(match coaching {
+                Some(c) => format!("{}\n\n{}", c, msg),
+                None => msg,
+            });
         }
 
         let total = all_results.len();
-        if total >= MAX_GREP_RESULTS {
-            Ok(format!(
+        let result = if total >= MAX_GREP_RESULTS {
+            format!(
                 "{} results (showing first {}, searched {} files):\n{}\n\n... and {} more matches",
                 total,
                 MAX_GREP_RESULTS,
                 file_count,
                 all_results.join("\n"),
                 total - MAX_GREP_RESULTS
-            ))
+            )
         } else {
-            Ok(format!(
+            format!(
                 "{} results (searched {} files):\n{}",
                 total,
                 file_count,
                 all_results.join("\n")
-            ))
-        }
+            )
+        };
+        Ok(match coaching {
+            Some(c) => format!("{}\n\n{}", c, result),
+            None => result,
+        })
     }
 }

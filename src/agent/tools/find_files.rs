@@ -47,7 +47,8 @@ impl Tool for FindFilesTool {
     }
 
     async fn call(&self, args: FindFilesArgs) -> Result<String, ToolError> {
-        check_perm(&self.permission, &self.ask_tx, "find_files", &args.pattern).await?;
+        let coaching =
+            check_perm(&self.permission, &self.ask_tx, "find_files", &args.pattern).await?;
 
         let re = Regex::new(&args.pattern)
             .map_err(|e| ToolError::Msg(format!("Invalid regex: {}", e)))?;
@@ -85,22 +86,30 @@ impl Tool for FindFilesTool {
         }
 
         if results.is_empty() {
-            return Ok("No files found matching the pattern.".to_string());
+            let msg = "No files found matching the pattern.".to_string();
+            return Ok(match coaching {
+                Some(c) => format!("{}\n\n{}", c, msg),
+                None => msg,
+            });
         }
 
         results.sort();
 
         let total = results.len();
-        if total >= MAX_FIND_RESULTS {
-            Ok(format!(
+        let result = if total >= MAX_FIND_RESULTS {
+            format!(
                 "{} files found (showing first {}):\n{}\n\n... and {} more",
                 total,
                 MAX_FIND_RESULTS,
                 results[..MAX_FIND_RESULTS].join("\n"),
                 total - MAX_FIND_RESULTS
-            ))
+            )
         } else {
-            Ok(format!("{} files found:\n{}", total, results.join("\n")))
-        }
+            format!("{} files found:\n{}", total, results.join("\n"))
+        };
+        Ok(match coaching {
+            Some(c) => format!("{}\n\n{}", c, result),
+            None => result,
+        })
     }
 }

@@ -1,7 +1,7 @@
 use regex::Regex;
 use std::sync::OnceLock;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Pattern {
     regex: OnceLock<Regex>,
     pub original: String,
@@ -36,16 +36,6 @@ impl Pattern {
             Regex::new(&regex_str).unwrap_or_else(|_| Regex::new("^$").unwrap())
         });
         regex.is_match(input)
-    }
-}
-
-impl Clone for Pattern {
-    fn clone(&self) -> Self {
-        Pattern {
-            regex: OnceLock::new(),
-            original: self.original.clone(),
-            is_regex: self.is_regex,
-        }
     }
 }
 

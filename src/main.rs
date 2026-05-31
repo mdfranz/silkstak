@@ -23,6 +23,7 @@ static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 use clap::Parser;
 use session::MessageRole;
 
+use crate::agent::tools;
 use crate::permission::SecurityMode;
 use crate::permission::ask::AskSender;
 use crate::permission::checker::{PermCheck, PermissionChecker};
@@ -31,13 +32,20 @@ fn resolve_mode(cli: &cli::Cli, cfg: &config::Config) -> SecurityMode {
     if cli.yolo || cfg.yolo.unwrap_or(false) {
         SecurityMode::Yolo
     } else if cli.accept_all || cfg.accept_all.unwrap_or(false) {
-        SecurityMode::Accept
+        SecurityMode::Standard
+    } else if cli.read_only {
+        SecurityMode::ReadOnly
+    } else if cli.guarded {
+        SecurityMode::Guarded
     } else if cli.restrictive || cfg.restrictive.unwrap_or(false) {
         SecurityMode::Restrictive
     } else if let Some(m) = &cfg.default_permission_mode {
         match m.as_str() {
             "yolo" => SecurityMode::Yolo,
-            "accept" => SecurityMode::Accept,
+            "accept" => SecurityMode::Standard,
+            "standard" => SecurityMode::Standard,
+            "guarded" => SecurityMode::Guarded,
+            "readonly" => SecurityMode::ReadOnly,
             "restrictive" => SecurityMode::Restrictive,
             _ => SecurityMode::Standard,
         }
@@ -59,10 +67,15 @@ fn build_permission_checker(
         return (None, None, None);
     }
 
+    if cli.dangerously_skip_permissions {
+        return (None, None, None);
+    }
+
     let perm_config = cfg.build_permission_config();
 
     let mode = resolve_mode(cli, cfg);
-    let checker = PermissionChecker::new(&perm_config, mode, None);
+    let permission_modes = cfg.permission_modes.clone();
+    let checker = PermissionChecker::new(&perm_config, mode, None, permission_modes);
     let perm: PermCheck = std::sync::Arc::new(std::sync::Mutex::new(checker));
 
     let (ask_tx, ask_rx) = tokio::sync::mpsc::channel(64);
@@ -90,10 +103,19 @@ async fn main() -> anyhow::Result<()> {
     let mut context = context::load(cli.resolve_no_context_files(&cfg));
 
     let default_prompt = cfg.default_prompt.as_deref().unwrap_or("code");
-    if let Some(content) = context.prompts.get(default_prompt) {
-        context.current_prompt = Some(content.clone());
-        context.current_prompt_name = Some(default_prompt.to_string());
-    }
+    let default_prompt_mode: Option<&str> =
+        if let Some(content) = context.prompts.get(default_prompt) {
+            let (mode_directive, clean_content) = crate::permission::parse_prompt_mode(content);
+            context.current_prompt = Some(if mode_directive.is_some() {
+                clean_content.to_string()
+            } else {
+                content.clone()
+            });
+            context.current_prompt_name = Some(default_prompt.to_string());
+            mode_directive
+        } else {
+            None
+        };
 
     let mut provider = cli.resolve_provider(&cfg);
     let mut model = cli.resolve_model(&cfg);
@@ -104,7 +126,30 @@ async fn main() -> anyhow::Result<()> {
         model = qm.model.clone();
     }
 
+    // Custom provider model override (if no explicit model set)
+    if let Some(custom) = cfg.custom_providers_map().get(provider.as_str())
+        && cli.model.is_none()
+        && cfg.model.is_none()
+        && let Some(ref custom_model) = custom.model
+    {
+        model = custom_model.clone();
+    }
+
     let mut session = session::Session::new(&provider, &model, cfg.resolve_context_window());
+
+    // Resolve input/output token costs from quick models or defaults
+    let qm_map = config::quick_models_map(&cfg);
+    if let Some(qm) = cli.resolve_quick_model(&cfg) {
+        session.input_token_cost = qm.input_token_cost;
+        session.output_token_cost = qm.output_token_cost;
+    } else if let Some(qm) = qm_map
+        .iter()
+        .find(|(_, v)| v.model.as_str() == model && v.provider.as_str() == provider)
+        .map(|(_, v)| v)
+    {
+        session.input_token_cost = qm.input_token_cost;
+        session.output_token_cost = qm.output_token_cost;
+    }
 
     if cli.resume && cli.session.is_none() && !cli.continue_session {
         let sessions = session::storage::find_recent_sessions(10)?;
@@ -159,8 +204,13 @@ async fn main() -> anyhow::Result<()> {
         return extras::acp::serve(cli, cfg, context).await;
     }
 
-    let sandbox =
-        sandbox::Sandbox::new(cli.resolve_sandbox(&cfg)).with_shell(&cli.resolve_shell(&cfg));
+    let sandbox = sandbox::Sandbox::new(
+        cli.resolve_sandbox(&cfg),
+        &cli.resolve_sandbox_backend(&cfg),
+    )
+    .with_shell(&cli.resolve_shell(&cfg));
+    let edit_system = cli.resolve_edit_system(&cfg);
+    tools::set_edit_system(edit_system);
     let (permission, ask_tx, ask_rx) = build_permission_checker(&cli, &cfg);
 
     if let Some(perm) = &permission {
@@ -169,39 +219,81 @@ async fn main() -> anyhow::Result<()> {
             .iter()
             .map(|e| (e.tool.to_string(), e.pattern.to_string()))
             .collect();
-        perm.lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .load_session_allowlist(&allowlist);
+        let mut guard = perm.lock().unwrap_or_else(|e| e.into_inner());
+        guard.load_session_allowlist(&allowlist);
+        // Apply mode from prompt %%mode= directive (if any)
+        if let Some(mode_str) = default_prompt_mode
+            && mode_str != "last_user_mode"
+            && let Some(mode) = SecurityMode::from_str(mode_str)
+        {
+            guard.set_prompt_mode(mode);
+        }
     }
 
     let completion_model = client.completion_model(model.to_string());
 
     if cli.print {
-        let agent = provider::build_agent(
-            completion_model,
-            &cli,
-            &cfg,
-            &context,
-            permission,
-            ask_tx,
-            sandbox.clone(),
-            true,
-            #[cfg(feature = "mcp")]
-            None,
-        )
-        .await;
         let msg = cli.message.join(" ");
-        let response = agent
-            .run_print(&msg, cli.resolve_max_agent_turns(&cfg))
-            .await?;
-        if !cli.no_session {
-            session.add_message(MessageRole::User, &msg);
-            session.add_message(MessageRole::Assistant, &response);
-            session::storage::save_session(&session)?;
-            let _ = session::chat_history::append_entry(&session::chat_history::ChatHistoryEntry {
-                content: msg,
-                timestamp: session.updated_at.clone(),
-            });
+        if msg.starts_with('!') {
+            let cmd = msg.strip_prefix('!').map(|s| s.trim()).unwrap_or("");
+            if !cmd.is_empty() {
+                let output = std::process::Command::new("bash")
+                    .arg("-c")
+                    .arg(cmd)
+                    .output()?;
+                let mut result = String::new();
+                if !output.stdout.is_empty() {
+                    result.push_str(&String::from_utf8_lossy(&output.stdout));
+                }
+                if !output.stderr.is_empty() {
+                    if !result.is_empty() {
+                        result.push('\n');
+                    }
+                    result.push_str(&String::from_utf8_lossy(&output.stderr));
+                }
+                let result = result.trim().to_string();
+                println!("{}", result);
+                if !cli.no_session {
+                    session.add_message(MessageRole::User, &msg);
+                    session.add_message(MessageRole::Assistant, &result);
+                    session::storage::save_session(&session)?;
+                    let _ = session::chat_history::append_entry(
+                        &session::chat_history::ChatHistoryEntry {
+                            content: msg,
+                            timestamp: session.updated_at.clone(),
+                        },
+                    );
+                }
+            } else {
+                eprintln!("error: empty command after '!'");
+            }
+        } else {
+            let agent = provider::build_agent(
+                completion_model,
+                &cli,
+                &cfg,
+                &context,
+                permission,
+                ask_tx,
+                sandbox.clone(),
+                true,
+                #[cfg(feature = "mcp")]
+                None,
+            )
+            .await;
+            let response = agent
+                .run_print(&msg, cli.resolve_max_agent_turns(&cfg))
+                .await?;
+            if !cli.no_session {
+                session.add_message(MessageRole::User, &msg);
+                session.add_message(MessageRole::Assistant, &response);
+                session::storage::save_session(&session)?;
+                let _ =
+                    session::chat_history::append_entry(&session::chat_history::ChatHistoryEntry {
+                        content: msg,
+                        timestamp: session.updated_at.clone(),
+                    });
+            }
         }
     } else {
         #[cfg(feature = "loop")]
@@ -279,12 +371,19 @@ fn print_config(cli: &cli::Cli, cfg: &config::Config) {
     let no_context_files = cli.resolve_no_context_files(cfg);
     let sandbox = cli.resolve_sandbox(cfg);
     let shell = cli.resolve_shell(cfg);
+    let edit_system = cli.resolve_edit_system(cfg);
     let compact = cfg.resolve_compact_enabled();
 
-    let mode = if cli.yolo || cfg.yolo.unwrap_or(false) {
+    let mode = if cli.dangerously_skip_permissions {
+        "dangerously-skip-permissions"
+    } else if cli.yolo || cfg.yolo.unwrap_or(false) {
         "yolo"
     } else if cli.accept_all || cfg.accept_all.unwrap_or(false) {
-        "accept"
+        "standard"
+    } else if cli.read_only {
+        "readonly"
+    } else if cli.guarded {
+        "guarded"
     } else if cli.restrictive || cfg.restrictive.unwrap_or(false) {
         "restrictive"
     } else {
@@ -325,6 +424,7 @@ fn print_config(cli: &cli::Cli, cfg: &config::Config) {
         &[
             ("permission-mode", mode.to_string()),
             ("shell", shell.to_string()),
+            ("edit-system", edit_system.to_string()),
             ("sandbox", sandbox.to_string()),
             ("no-tools", no_tools.to_string()),
             ("no-context-files", no_context_files.to_string()),

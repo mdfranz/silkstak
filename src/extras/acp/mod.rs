@@ -145,7 +145,15 @@ async fn run_prompt(
     cx: ConnectionTo<Client>,
 ) -> Result<(), agent_client_protocol::Error> {
     let provider_str = state.cli.resolve_provider(&state.cfg);
-    let model_str = state.cli.resolve_model(&state.cfg);
+    let mut model_str = state.cli.resolve_model(&state.cfg);
+
+    // Custom provider model override (if no explicit model set)
+    if (model_str.as_str() == "deepseek/deepseek-v4-flash" || state.cli.model.is_none())
+        && let Some(custom) = state.cfg.custom_providers_map().get(provider_str.as_str())
+        && let Some(ref custom_model) = custom.model
+    {
+        model_str = custom_model.clone();
+    }
 
     let client = crate::provider::create_client(
         &provider_str,
@@ -158,8 +166,11 @@ async fn run_prompt(
     let model = client.completion_model(model_str.to_string());
 
     let (permission, ask_tx) = build_acp_permission(state);
-    let sandbox = Sandbox::new(state.cli.resolve_sandbox(&state.cfg))
-        .with_shell(&state.cli.resolve_shell(&state.cfg));
+    let sandbox = Sandbox::new(
+        state.cli.resolve_sandbox(&state.cfg),
+        &state.cli.resolve_sandbox_backend(&state.cfg),
+    )
+    .with_shell(&state.cli.resolve_shell(&state.cfg));
 
     let agent = crate::provider::build_agent(
         model,
@@ -241,14 +252,15 @@ fn build_acp_permission(state: &AcpState) -> (Option<PermCheck>, Option<AskSende
     use std::sync::Mutex;
 
     let no_tools = state.cli.resolve_no_tools(&state.cfg);
-    if no_tools {
+    if no_tools || state.cli.dangerously_skip_permissions {
         return (None, None);
     }
 
     let perm_config = state.cfg.build_permission_config();
 
     let mode = resolve_acp_mode(&state.cli, &state.cfg);
-    let checker = PermissionChecker::new(&perm_config, mode, None);
+    let permission_modes = state.cfg.permission_modes.clone();
+    let checker = PermissionChecker::new(&perm_config, mode, None, permission_modes);
     let perm: PermCheck = Arc::new(Mutex::new(checker));
 
     let (ask_tx, _ask_rx) = tokio::sync::mpsc::channel(64);
@@ -257,16 +269,20 @@ fn build_acp_permission(state: &AcpState) -> (Option<PermCheck>, Option<AskSende
 }
 
 fn resolve_acp_mode(cli: &Cli, cfg: &Config) -> SecurityMode {
-    if cli.yolo || cfg.yolo.unwrap_or(false) {
+    if cli.dangerously_skip_permissions {
+        SecurityMode::Standard
+    } else if cli.yolo || cfg.yolo.unwrap_or(false) {
         SecurityMode::Yolo
     } else if cli.accept_all || cfg.accept_all.unwrap_or(false) {
-        SecurityMode::Accept
+        SecurityMode::Standard
     } else if cli.restrictive || cfg.restrictive.unwrap_or(false) {
         SecurityMode::Restrictive
     } else if let Some(m) = &cfg.default_permission_mode {
         match m.as_str() {
             "yolo" => SecurityMode::Yolo,
-            "accept" => SecurityMode::Accept,
+            "accept" | "standard" => SecurityMode::Standard,
+            "guarded" => SecurityMode::Guarded,
+            "readonly" => SecurityMode::ReadOnly,
             "restrictive" => SecurityMode::Restrictive,
             _ => SecurityMode::Standard,
         }

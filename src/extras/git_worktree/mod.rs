@@ -8,6 +8,21 @@ pub struct WorktreeInfo {
     pub main_repo_path: PathBuf,
 }
 
+#[derive(Debug, Clone)]
+pub enum MergeOutcome {
+    Success,
+    Conflicts(Vec<String>),
+    Error(String),
+}
+
+#[derive(Debug, Clone)]
+pub struct MergeState {
+    pub info: WorktreeInfo,
+    pub original_branch: String,
+    pub orig_dir: PathBuf,
+    pub stashed: bool,
+}
+
 pub fn detect() -> Option<WorktreeInfo> {
     let output = Command::new("git")
         .args(["rev-parse", "--git-common-dir"])
@@ -77,11 +92,15 @@ pub fn default_branch(repo_path: &Path) -> Option<String> {
     None
 }
 
-pub fn create(name: &str) -> Result<(PathBuf, WorktreeInfo), String> {
-    let target = format!("../{}", name);
+pub fn create(name: &str, base_dir: Option<&Path>) -> Result<(PathBuf, WorktreeInfo), String> {
+    let target = match base_dir {
+        Some(dir) => dir.join(name),
+        None => PathBuf::from(format!("../{}", name)),
+    };
 
     let output = Command::new("git")
-        .args(["worktree", "add", "-b", name, &target])
+        .args(["worktree", "add", "-b", name])
+        .arg(&target)
         .output()
         .map_err(|e| format!("failed to run git: {}", e))?;
 
@@ -90,7 +109,7 @@ pub fn create(name: &str) -> Result<(PathBuf, WorktreeInfo), String> {
         return Err(format!("git worktree add failed: {}", stderr.trim()));
     }
 
-    let wt_path = PathBuf::from(&target)
+    let wt_path = target
         .canonicalize()
         .map_err(|e| format!("failed to resolve worktree path: {}", e))?;
 
@@ -113,34 +132,204 @@ pub fn repo_name(path: &Path) -> String {
         .unwrap_or_else(|| "unknown".to_string())
 }
 
-pub fn merge(info: &WorktreeInfo, target: &str) -> Result<(), String> {
-    // Change to main repo
-    let orig = std::env::current_dir().map_err(|e| e.to_string())?;
-    std::env::set_current_dir(&info.main_repo_path).map_err(|e| e.to_string())?;
+/// Phase 1: Change to main repo, stash, fetch, checkout target, pull, merge.
+/// On Success or Conflicts, current directory is left in the main repo (on target).
+/// On Error, the function cleans up and restores the original directory.
+pub fn try_merge(info: &WorktreeInfo, target: &str) -> (MergeState, MergeOutcome) {
+    let orig_dir = match std::env::current_dir() {
+        Ok(d) => d,
+        Err(e) => {
+            return (
+                MergeState {
+                    info: info.clone(),
+                    original_branch: String::new(),
+                    stashed: false,
+                    orig_dir: PathBuf::new(),
+                },
+                MergeOutcome::Error(e.to_string()),
+            );
+        }
+    };
 
-    let result = (|| -> Result<(), String> {
-        // Fetch latest
-        run_git(["fetch", "--all"])?;
-        // Checkout target branch
-        run_git(["checkout", target])?;
-        // Pull latest
-        run_git(["pull"])?;
-        // Merge the worktree branch
-        run_git(["merge", &info.branch])?;
-        // Delete the worktree
-        run_git(["worktree", "remove", &info.worktree_path.to_string_lossy()])?;
-        // Delete the local branch
-        run_git(["branch", "-d", &info.branch])?;
-        Ok(())
+    if let Err(e) = std::env::set_current_dir(&info.main_repo_path) {
+        return (
+            MergeState {
+                info: info.clone(),
+                original_branch: String::new(),
+                stashed: false,
+                orig_dir,
+            },
+            MergeOutcome::Error(e.to_string()),
+        );
+    }
+
+    let original_branch = current_branch().unwrap_or_default();
+    let stashed = has_uncommitted_changes() && run_git(["stash", "--include-untracked"]).is_ok();
+
+    if let Err(e) = run_git(["fetch", "--all"]) {
+        if stashed {
+            let _ = run_git_quiet(["stash", "pop"]);
+        }
+        let _ = std::env::set_current_dir(&orig_dir);
+        return (
+            MergeState {
+                info: info.clone(),
+                original_branch,
+                stashed,
+                orig_dir,
+            },
+            MergeOutcome::Error(format!("fetch failed: {}", e)),
+        );
+    }
+
+    if let Err(e) = run_git(["checkout", target]) {
+        if stashed {
+            let _ = run_git_quiet(["stash", "pop"]);
+        }
+        let _ = std::env::set_current_dir(&orig_dir);
+        return (
+            MergeState {
+                info: info.clone(),
+                original_branch,
+                stashed,
+                orig_dir,
+            },
+            MergeOutcome::Error(format!("checkout failed: {}", e)),
+        );
+    }
+
+    if let Err(e) = run_git(["pull", "--no-edit"]) {
+        let _ = run_git_quiet(["checkout", &original_branch]);
+        if stashed {
+            let _ = run_git_quiet(["stash", "pop"]);
+        }
+        let _ = std::env::set_current_dir(&orig_dir);
+        return (
+            MergeState {
+                info: info.clone(),
+                original_branch,
+                stashed,
+                orig_dir,
+            },
+            MergeOutcome::Error(format!("pull failed: {}", e)),
+        );
+    }
+
+    let state = MergeState {
+        info: info.clone(),
+        original_branch,
+        stashed,
+        orig_dir,
+    };
+
+    match run_git(["merge", "--no-edit", &info.branch]) {
+        Ok(_) => (state, MergeOutcome::Success),
+        Err(_) if has_merge_conflict() => {
+            let files = conflicted_files();
+            (state, MergeOutcome::Conflicts(files))
+        }
+        Err(e) => {
+            let _ = run_git_quiet(["merge", "--abort"]);
+            let _ = run_git_quiet(["checkout", &state.original_branch]);
+            if stashed {
+                let _ = run_git_quiet(["stash", "pop"]);
+            }
+            let _ = std::env::set_current_dir(&state.orig_dir);
+            (state, MergeOutcome::Error(format!("merge failed: {}", e)))
+        }
+    }
+}
+
+/// Phase 2: After a successful merge (or after conflicts are resolved),
+/// push, delete the worktree, delete the branch, restore original dir.
+pub fn complete_merge(state: &MergeState) -> Result<(), String> {
+    let current = std::env::current_dir().map_err(|e| e.to_string())?;
+    let _ = std::env::set_current_dir(&state.info.main_repo_path);
+
+    let result = (|| {
+        run_git(["push"])?;
+        run_git([
+            "worktree",
+            "remove",
+            &state.info.worktree_path.to_string_lossy(),
+        ])?;
+        run_git(["branch", "-D", &state.info.branch])?;
+        Ok::<(), String>(())
     })();
 
-    // Restore original directory
-    let _ = std::env::set_current_dir(&orig);
+    if result.is_ok() {
+        if state.stashed {
+            let _ = run_git_quiet(["stash", "pop"]);
+        }
+        let _ = std::env::set_current_dir(&state.orig_dir);
+    } else {
+        let _ = std::env::set_current_dir(&current);
+    }
+
     result
 }
 
-fn run_git<const N: usize>(args: [&str; N]) -> Result<(), String> {
-    let output = std::process::Command::new("git")
+/// Cancel an in-progress merge: abort, restore original branch, pop stash, restore dir.
+pub fn cancel_merge(state: &MergeState) -> Result<(), String> {
+    let _ = std::env::set_current_dir(&state.info.main_repo_path);
+
+    if has_merge_conflict() {
+        let _ = run_git_quiet(["merge", "--abort"]);
+    }
+    if !state.original_branch.is_empty() {
+        let _ = run_git_quiet(["checkout", &state.original_branch]);
+    }
+    if state.stashed {
+        let _ = run_git_quiet(["stash", "pop"]);
+    }
+    let _ = std::env::set_current_dir(&state.orig_dir);
+
+    Ok(())
+}
+
+/// Check if there is an active merge conflict in the current directory.
+pub fn has_merge_conflict() -> bool {
+    let output = Command::new("git")
+        .args(["rev-parse", "--git-dir"])
+        .output()
+        .ok();
+    if let Some(out) = output
+        && out.status.success()
+    {
+        let git_dir = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        let merge_head = Path::new(&git_dir).join("MERGE_HEAD");
+        if merge_head.exists() {
+            return true;
+        }
+    }
+    let output = Command::new("git")
+        .args(["diff", "--name-only", "--diff-filter=U"])
+        .output();
+    match output {
+        Ok(out) if out.status.success() => !String::from_utf8_lossy(&out.stdout).trim().is_empty(),
+        _ => false,
+    }
+}
+
+/// List files with merge conflicts in the current directory.
+pub fn conflicted_files() -> Vec<String> {
+    let output = Command::new("git")
+        .args(["diff", "--name-only", "--diff-filter=U"])
+        .output();
+    match output {
+        Ok(out) if out.status.success() => String::from_utf8_lossy(&out.stdout)
+            .trim()
+            .lines()
+            .map(|s| s.to_string())
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
+// --- Private helpers ---
+
+fn run_git<const N: usize>(args: [&str; N]) -> Result<String, String> {
+    let output = Command::new("git")
         .args(args)
         .output()
         .map_err(|e| format!("git failed: {}", e))?;
@@ -148,5 +337,22 @@ fn run_git<const N: usize>(args: [&str; N]) -> Result<(), String> {
         let stderr = String::from_utf8_lossy(&output.stderr);
         return Err(format!("git {} failed: {}", args.join(" "), stderr.trim()));
     }
-    Ok(())
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+fn run_git_quiet<const N: usize>(args: [&str; N]) -> Option<String> {
+    let output = Command::new("git").args(args).output().ok()?;
+    if output.status.success() {
+        Some(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    } else {
+        None
+    }
+}
+
+fn has_uncommitted_changes() -> bool {
+    let output = Command::new("git").args(["status", "--porcelain"]).output();
+    match output {
+        Ok(out) if out.status.success() => !String::from_utf8_lossy(&out.stdout).trim().is_empty(),
+        _ => false,
+    }
 }

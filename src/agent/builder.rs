@@ -145,9 +145,16 @@ pub async fn build_agent_inner<M: CompletionModel + 'static>(
         #[cfg(feature = "mcp")]
         if let Some(manager) = &mcp_manager {
             let allow_all = cfg.allow_all_mcp_calls.unwrap_or(false);
-            let mcp_permission = if allow_all { None } else { permission.clone() };
-            let mcp_ask_tx = if allow_all { None } else { ask_tx.clone() };
-            let mcp_tools = manager.collect_tools(mcp_permission, mcp_ask_tx).await;
+            if allow_all {
+                if let Some(ref perm) = permission {
+                    perm.lock()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .set_allow_all_mcp_calls(true);
+                }
+            }
+            let mcp_tools = manager
+                .collect_tools(permission.clone(), ask_tx.clone())
+                .await;
             if !mcp_tools.is_empty() {
                 let dyn_tools: Vec<Box<dyn rig::tool::ToolDyn>> = mcp_tools
                     .into_iter()

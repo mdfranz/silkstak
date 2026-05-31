@@ -17,7 +17,7 @@ use crate::ui::events::sanitize_output;
 use crate::ui::renderer::Renderer;
 use crate::ui::slash::handle_compress;
 
-use super::{C_AGENT, C_ERROR, C_TOOL};
+use super::{C_AGENT, C_ERROR, C_TOOL, apply_current_prompt_mode};
 
 #[cfg(feature = "mcp")]
 #[allow(clippy::too_many_arguments)]
@@ -286,8 +286,12 @@ async fn handle_agent_done(
     session.add_message(MessageRole::Assistant, &response);
     session.total_input_tokens = session.total_input_tokens.saturating_add(input_tokens);
     session.total_output_tokens = session.total_output_tokens.saturating_add(output_tokens);
-    session.total_cost +=
-        crate::pricing::estimate_cost(&session.model, input_tokens, output_tokens);
+    session.total_cost += crate::pricing::estimate_cost(
+        input_tokens,
+        output_tokens,
+        session.input_token_cost,
+        session.output_token_cost,
+    );
     *agent_line_started = false;
     response_buf.clear();
     *response_start_line = None;
@@ -398,6 +402,7 @@ async fn handle_agent_done(
             Ok(()) => {
                 session.working_dir = compact_str::CompactString::new(&main_path);
                 context.reload();
+                apply_current_prompt_mode(context, permission);
                 *agent = Some({
                     let model = client.completion_model(session.model.to_string());
                     crate::provider::build_agent(

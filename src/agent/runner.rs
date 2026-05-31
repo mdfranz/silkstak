@@ -46,73 +46,103 @@ where
     let (event_tx, event_rx) = mpsc::channel::<AgentEvent>(32);
 
     tokio::spawn(async move {
+        // Clone prompt and history so they're available for a potential retry
+        // when the model returns an empty final response.
+        let retry_prompt = prompt.clone();
+        let retry_history: Vec<Message> = history.clone();
+
         let mut stream = agent.stream_chat(prompt, history).await;
 
-        while let Some(item) = stream.next().await {
-            match item {
-                Ok(MultiTurnStreamItem::StreamAssistantItem(StreamedAssistantContent::Text(
-                    text,
-                ))) => {
-                    let _ = event_tx
-                        .send(AgentEvent::Token(CompactString::from(text.text)))
-                        .await;
-                }
-                Ok(MultiTurnStreamItem::StreamAssistantItem(
-                    StreamedAssistantContent::Reasoning(r),
-                )) => {
-                    let _ = event_tx
-                        .send(AgentEvent::Reasoning(CompactString::new(r.display_text())))
-                        .await;
-                }
-                Ok(MultiTurnStreamItem::StreamAssistantItem(
-                    StreamedAssistantContent::ToolCall { tool_call, .. },
-                )) => {
-                    let _ = event_tx
-                        .send(AgentEvent::ToolCall {
-                            name: CompactString::from(tool_call.function.name),
-                            args: tool_call.function.arguments,
-                        })
-                        .await;
-                }
-                Ok(MultiTurnStreamItem::StreamUserItem(StreamedUserContent::ToolResult {
-                    tool_result,
-                    ..
-                })) => {
-                    let mut output = String::new();
-                    for c in tool_result.content.iter() {
-                        if let ToolResultContent::Text(t) = c {
-                            if !output.is_empty() {
-                                output.push('\n');
-                            }
-                            output.push_str(&t.text);
-                        }
+        loop {
+            let mut retrying = false;
+
+            while let Some(item) = stream.next().await {
+                match item {
+                    Ok(MultiTurnStreamItem::StreamAssistantItem(
+                        StreamedAssistantContent::Text(text),
+                    )) => {
+                        let _ = event_tx
+                            .send(AgentEvent::Token(CompactString::from(text.text)))
+                            .await;
                     }
-                    let _ = event_tx
-                        .send(AgentEvent::ToolResult {
-                            output: CompactString::from(output),
-                        })
-                        .await;
+                    Ok(MultiTurnStreamItem::StreamAssistantItem(
+                        StreamedAssistantContent::Reasoning(r),
+                    )) => {
+                        let _ = event_tx
+                            .send(AgentEvent::Reasoning(CompactString::new(r.display_text())))
+                            .await;
+                    }
+                    Ok(MultiTurnStreamItem::StreamAssistantItem(
+                        StreamedAssistantContent::ToolCall { tool_call, .. },
+                    )) => {
+                        let _ = event_tx
+                            .send(AgentEvent::ToolCall {
+                                name: CompactString::from(tool_call.function.name),
+                                args: tool_call.function.arguments,
+                            })
+                            .await;
+                    }
+                    Ok(MultiTurnStreamItem::StreamUserItem(StreamedUserContent::ToolResult {
+                        tool_result,
+                        ..
+                    })) => {
+                        let mut output = String::new();
+                        for c in tool_result.content.iter() {
+                            if let ToolResultContent::Text(t) = c {
+                                if !output.is_empty() {
+                                    output.push('\n');
+                                }
+                                output.push_str(&t.text);
+                            }
+                        }
+                        let _ = event_tx
+                            .send(AgentEvent::ToolResult {
+                                output: CompactString::from(output),
+                            })
+                            .await;
+                    }
+                    Ok(MultiTurnStreamItem::FinalResponse(res)) => {
+                        let response_text = res.response();
+                        let usage = res.usage();
+
+                        if response_text.is_empty() {
+                            retrying = true;
+                            break;
+                        }
+
+                        let _ = event_tx
+                            .send(AgentEvent::Done {
+                                response: CompactString::from(response_text),
+                                input_tokens: usage.input_tokens,
+                                output_tokens: usage.output_tokens,
+                            })
+                            .await;
+                        return;
+                    }
+                    Err(e) => {
+                        let _ = event_tx
+                            .send(AgentEvent::Error(CompactString::new(e.to_string())))
+                            .await;
+                        return;
+                    }
+                    _ => {}
                 }
-                Ok(MultiTurnStreamItem::FinalResponse(res)) => {
-                    let response_text = res.response();
-                    let usage = res.usage();
-                    let _ = event_tx
-                        .send(AgentEvent::Done {
-                            response: CompactString::from(response_text),
-                            input_tokens: usage.input_tokens,
-                            output_tokens: usage.output_tokens,
-                        })
-                        .await;
-                    break;
-                }
-                Err(e) => {
-                    let _ = event_tx
-                        .send(AgentEvent::Error(CompactString::new(e.to_string())))
-                        .await;
-                    break;
-                }
-                _ => {}
             }
+
+            if retrying {
+                let mut new_history = retry_history.clone();
+                new_history.push(Message::user(retry_prompt.clone()));
+                new_history.push(Message::assistant(String::new()));
+                stream = agent.stream_chat("Please continue.", new_history).await;
+                continue;
+            }
+
+            let _ = event_tx
+                .send(AgentEvent::Error(CompactString::new(
+                    "Stream ended without final response",
+                )))
+                .await;
+            return;
         }
     });
 

@@ -5,6 +5,60 @@ use tokio::time::{Duration, timeout};
 use crate::agent::tools::{AskSender, BashArgs, PermCheck, ToolError, check_perm};
 use crate::sandbox::Sandbox;
 
+fn split_bash_commands(input: &str) -> Vec<String> {
+    let mut result = Vec::new();
+    let mut current = String::new();
+    let mut in_single_quote = false;
+    let mut in_double_quote = false;
+    let mut chars = input.chars().peekable();
+
+    while let Some(ch) = chars.next() {
+        if ch == '\\' {
+            current.push(ch);
+            if let Some(next) = chars.next() {
+                current.push(next);
+            }
+        } else if ch == '\'' && !in_double_quote {
+            in_single_quote = !in_single_quote;
+            current.push(ch);
+        } else if ch == '"' && !in_single_quote {
+            in_double_quote = !in_double_quote;
+            current.push(ch);
+        } else if ch == '&' && !in_single_quote && !in_double_quote {
+            if chars.peek() == Some(&'&') {
+                chars.next();
+                let trimmed = current.trim().to_string();
+                if !trimmed.is_empty() {
+                    result.push(trimmed);
+                }
+                current = String::new();
+            } else {
+                current.push(ch);
+            }
+        } else if ch == '|' && !in_single_quote && !in_double_quote {
+            if chars.peek() == Some(&'|') {
+                chars.next();
+                let trimmed = current.trim().to_string();
+                if !trimmed.is_empty() {
+                    result.push(trimmed);
+                }
+                current = String::new();
+            } else {
+                current.push(ch);
+            }
+        } else {
+            current.push(ch);
+        }
+    }
+
+    let trimmed = current.trim().to_string();
+    if !trimmed.is_empty() {
+        result.push(trimmed);
+    }
+
+    result
+}
+
 pub struct BashTool {
     pub permission: Option<PermCheck>,
     pub ask_tx: Option<AskSender>,
@@ -44,7 +98,12 @@ impl Tool for BashTool {
     }
 
     async fn call(&self, args: BashArgs) -> Result<String, ToolError> {
-        check_perm(&self.permission, &self.ask_tx, "bash", &args.command).await?;
+        let mut coaching: Option<String> = None;
+        for cmd in split_bash_commands(&args.command) {
+            if let Some(msg) = check_perm(&self.permission, &self.ask_tx, "bash", &cmd).await? {
+                coaching = Some(msg);
+            }
+        }
 
         let output = if let Some(secs) = args.timeout {
             timeout(
@@ -73,6 +132,9 @@ impl Tool for BashTool {
         }
         if exit_code != 0 {
             result.push_str(&format!("\nExit code: {}", exit_code));
+        }
+        if let Some(msg) = coaching {
+            result = format!("{}\n\n{}", msg, result);
         }
         Ok(result)
     }

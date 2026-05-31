@@ -51,7 +51,7 @@ impl Tool for WriteTool {
 
     async fn call(&self, args: WriteArgs) -> Result<String, ToolError> {
         let expanded = crate::fs::expand_tilde(&args.path);
-        check_perm_path(&self.permission, &self.ask_tx, "write", &expanded).await?;
+        let coaching = check_perm_path(&self.permission, &self.ask_tx, "write", &expanded).await?;
 
         let path = Path::new(&expanded);
         if path.exists() {
@@ -71,6 +71,10 @@ impl Tool for WriteTool {
             )));
         }
         tokio::fs::write(path, &args.content).await?;
-        Ok(format!("Written {} bytes to {}", bytes, expanded))
+        let mut result = format!("Written {} bytes to {}", bytes, expanded);
+        if let Some(msg) = coaching {
+            result = format!("{}\n\n{}", msg, result);
+        }
+        Ok(result)
     }
 }

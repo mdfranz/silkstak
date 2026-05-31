@@ -1,12 +1,15 @@
-# zerostack
+![banner](https://github.com/gi-dellav/zerostack/blob/main/assets/banner.png?raw=true)
 
+---
+
+# zerostack
 Minimal coding agent written in Rust, inspired by [pi](https://pi.dev/docs/latest/usage) and [opencode](https://opencode.ai/).
 
 ## Features
 
 - **Multi-provider**: OpenRouter, OpenAI, Anthropic, Gemini, Ollama, plus custom providers
 - **Standard tools**: all of the standard tools exposed to coding agents, as described by the opencode documentation.
-- **Permission system**: four configurable modes with per-tool patterns, session allowlists, and external directory policies
+- **Permission system**: five configurable modes with per-tool patterns, session allowlists, and configurable mode-to-rule application policies
 - **Session management**: save/load/resume sessions, auto-compaction to stay within context windows
 - **Terminal UI**: crossterm-based, markdown rendering, mouse selection/copy, scrollback, reasoning visibility toggle
 - **Prompts system**: switch between system prompt modes at runtime (`code`, `plan`, `review`, `debug`, etc.) to tailor the agent's behavior to the task without having to manage Skills.
@@ -23,7 +26,7 @@ Minimal coding agent written in Rust, inspired by [pi](https://pi.dev/docs/lates
 
 _zerostack_ is one of the smallest and most performant coding agents on the market.
 
-- Lines of code: ~12k LoC
+- Lines of code: ~13k LoC
 - Binary size: 12.9MB
 - RAM footprint: ~16MB on average, with peaks at ~24MB (vs ~300MB with peaks at ~700MB for opencode or other JS-based coding agents)
 - CPU usage: 0.0% on idle, ~1.5% when using tools (measured on an Intel i5 7th gen, vs ~2% on idle and ~20% when working for opencode)
@@ -63,6 +66,8 @@ dnf install bubblewrap
 pacman -S bubblewrap
 ```
 
+There is also support for zerobox as an alternative sandbox backend.
+
 ## Quick start
 
 ```bash
@@ -94,8 +99,8 @@ You can run `/prompt autoconfig` in order to use a specialized agent that allows
 
 ## Prompts system
 
-_zerostack_ includes a set of built-in system prompts that change the agent's behavior and tone.  
-The idea is to build a complete suite of prompts that can fully substitute skills like [superpower](https://github.com/obra/superpowers) or the [Claude's official skills](https://github.com/anthropics/claude-plugins-official/tree/main).  
+_zerostack_ includes a set of built-in system prompts that change the agent's behavior and tone.
+The idea is to build a complete suite of prompts that can fully substitute skills like [superpower](https://github.com/obra/superpowers) or the [Claude's official skills](https://github.com/anthropics/claude-plugins-official/tree/main).
 You can switch between different prompts or list all registered prompts using `/prompt`.
 
 Built-in prompts:
@@ -122,15 +127,19 @@ system prompt. Use `-n` / `--no-context-files` to disable this.
 
 ## Permission system
 
-zerostack has four permission modes, from safest to most permissive:
+zerostack has five permission modes:
 
-1. **restrictive** (`-R`): every tool action prompts for approval unless
-   explicitly allowed in config
-2. **standard** (default): safe commands (ls, cd, git log, cargo check) are
-   auto-approved; writes and destructive operations ask
-3. **accept-all** (`--accept-all`): auto-approves all operations inside the
-   working directory; external paths prompt for confirmation
-4. **yolo** (`--yolo`): auto-approves everything without prompting
+| Mode | CLI flag | Behavior |
+|------|----------|----------|
+| **restrictive** | `-R` / `--restrictive` | Ask for every operation. Config rules are ignored by default (can be enabled via `permission-modes`). |
+| **readonly** | `--read-only` | Allow read/grep/find_files/list_dir. Deny writes, edits, bash, and everything else. Config rules ignored by default. |
+| **guarded** | `--guarded` | Allow read tools. Ask for writes, edits, bash, and everything else. Config rules apply. |
+| **standard** | (default) | Allow path tools (read/write/edit/list_dir) within CWD and subdirectories. Safe bash commands (ls, cat, git log, cargo check) auto-allowed. Ask for external paths and unrecognized commands. Config rules apply and override mode defaults. |
+| **yolo** | `--yolo` | Allow everything, but prompt for destructive bash commands (rm, dd, mkfs, etc.). Config rules apply. |
+
+The `--dangerously-skip-permissions` flag completely bypasses all permission
+checks, allowing every tool operation without any guard. This is not a mode
+and cannot be toggled at runtime.
 
 Permissions can be configured per-tool with granular glob patterns in the
 config file. For example, you can allow `write **.rs` automatically while
@@ -170,29 +179,15 @@ default build. Install with `cargo install zerostack --features memory`.
 
 With the `memory` feature, zerostack keeps plain-Markdown notes on disk and
 injects the relevant ones into the system prompt at the start of every session,
-so it remembers your preferences and recent context across runs. No embeddings,
-no database — just files you can read, edit, and commit.
+so it remembers your preferences and recent context across runs.
 
-Stored under `$XDG_DATA_HOME/zerostack/agent/memory/`:
+Global memory files are stored in `$XDG_DATA_HOME/zerostack/agent/memory/`.
 
-- **`MEMORY.md`** — curated long-term facts, preferences, and decisions.
-  **Global**: shared across all projects, always injected.
-- **`projects/<slug>/SCRATCHPAD.md`** — a per-project checklist; only open
-  `- [ ]` items are injected.
-- **`projects/<slug>/daily/YYYY-MM-DD.md`** — a per-project running log; today's
-  and yesterday's are injected. Compaction summaries are appended here
-  automatically, so context survives compaction.
-- **`projects/<slug>/notes/*.md`** — per-project reference material kept on disk,
-  retrieved on demand (never auto-injected).
+## Parallel Agent
 
-`<slug>` is derived from the current working directory, so unrelated projects
-don't leak context into each other; only `MEMORY.md` is shared globally.
-
-The agent manages these through three tools: `memory_write`, `memory_read`, and
-`memory_search` (which locates relevant files so the agent can read them in full
-with `memory_read`). The files are plain Markdown, so you can also edit them by
-hand. Memory is injected as reference-only context, not as instructions.
-Long-term memory written during a session takes effect from the next session.
+If you want to make multiple agents work on the same repository without having to work with git worktrees,
+zerostack now ships with `--parallel`, which enables full management of a temporary git worktree that will
+be merged and removed before exiting the agent. 
 
 ## Loop system
 

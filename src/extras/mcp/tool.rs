@@ -63,7 +63,7 @@ impl ToolDyn for McpTool {
 
         Box::pin(async move {
             let perm_key = format!("mcp_tool:{server_name}:{tool_name}");
-            check_perm(&permission, &ask_tx, "mcp_tool", &perm_key)
+            let coaching = check_perm(&permission, &ask_tx, "mcp_tool", &perm_key)
                 .await
                 .map_err(|e| {
                     ToolError::ToolCallError(Box::new(McpToolError(CompactString::new(
@@ -119,6 +119,9 @@ impl ToolDyn for McpTool {
                     },
                     _ => {}
                 }
+            }
+            if let Some(msg) = coaching {
+                content = format!("{}\n\n{}", msg, content);
             }
             Ok(content)
         })

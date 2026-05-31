@@ -49,6 +49,10 @@ pub struct Session {
     pub total_output_tokens: u64,
     pub total_cost: f64,
     pub total_estimated_tokens: u64,
+    #[serde(default)]
+    pub input_token_cost: f64,
+    #[serde(default)]
+    pub output_token_cost: f64,
     pub context_window: u64,
     pub model: CompactString,
     pub provider: CompactString,
@@ -75,6 +79,8 @@ impl Session {
             total_output_tokens: 0,
             total_cost: 0.0,
             total_estimated_tokens: 0,
+            input_token_cost: 0.0,
+            output_token_cost: 0.0,
             context_window,
             model: CompactString::new(model),
             provider: CompactString::new(provider),

@@ -1,4 +1,18 @@
 use crossterm::style::Color;
+use unicode_width::UnicodeWidthStr;
+
+/// Returns the display width of a string in terminal columns.
+/// CJK characters typically occupy 2 columns; ASCII occupies 1.
+#[inline]
+pub(crate) fn display_width(s: &str) -> usize {
+    UnicodeWidthStr::width(s)
+}
+
+/// Returns the display width of a single character.
+#[inline]
+pub(crate) fn char_display_width(c: char) -> usize {
+    unicode_width::UnicodeWidthChar::width(c).unwrap_or(0)
+}
 
 /// Resolves a color based on monochrome mode.
 #[inline]
@@ -108,7 +122,7 @@ pub(crate) fn suggest_pattern(tool: &str, input: &str) -> String {
             if parent.is_empty() {
                 "**".to_string()
             } else {
-                format!("{}/*", parent)
+                format!("{}/**/*", parent)
             }
         }
         "grep" | "find_files" => {

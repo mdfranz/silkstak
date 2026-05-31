@@ -64,10 +64,14 @@ pub struct Config {
     pub yolo: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sandbox: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none", rename = "sandbox-backend")]
+    pub sandbox_backend: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub allow_all_mcp_calls: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub default_permission_mode: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", rename = "permission-modes")]
+    pub permission_modes: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub show_tool_details: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -75,6 +79,9 @@ pub struct Config {
     #[cfg(feature = "git-worktree")]
     #[serde(skip_serializing_if = "Option::is_none", rename = "wt-auto-merge")]
     pub wt_auto_merge: Option<bool>,
+    #[cfg(feature = "git-worktree")]
+    #[serde(skip_serializing_if = "Option::is_none", rename = "wt-base-dir")]
+    pub wt_base_dir: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub shell: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -95,6 +102,8 @@ pub struct Config {
     #[cfg(feature = "acp")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub acp_port: Option<u16>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub edit_system: Option<types::EditSystem>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub colors: Option<types::ColorsConfig>,
 }

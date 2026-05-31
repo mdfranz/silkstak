@@ -1,14 +1,29 @@
 mod bash;
+pub(crate) mod crc;
 pub(crate) mod edit;
 mod find_files;
 mod grep;
 mod list_dir;
 mod normalize;
-mod read;
+pub(crate) mod read;
 mod todo;
 mod write;
 
 pub(crate) use normalize::{levenshtein_similarity, normalize_whitespace};
+
+use std::sync::Mutex;
+
+use crate::config::types::EditSystem;
+
+static EDIT_SYSTEM: Mutex<EditSystem> = Mutex::new(EditSystem::Similarity);
+
+pub(crate) fn set_edit_system(es: EditSystem) {
+    *EDIT_SYSTEM.lock().unwrap_or_else(|e| e.into_inner()) = es;
+}
+
+pub(crate) fn edit_system() -> EditSystem {
+    *EDIT_SYSTEM.lock().unwrap_or_else(|e| e.into_inner())
+}
 
 pub use bash::BashTool;
 pub use edit::EditTool;
@@ -68,13 +83,25 @@ pub struct WriteArgs {
 #[derive(Deserialize)]
 pub struct EditArgs {
     pub path: String,
-    pub block: String,
+    #[serde(default)]
+    pub block: Option<String>,
+    #[serde(default)]
+    pub file_crc: Option<String>,
+    #[serde(default)]
+    pub edits: Option<Vec<EditOp>>,
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct EditBlock {
     pub search: String,
     pub replace: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub(crate) struct EditOp {
+    pub line: Option<String>,
+    pub lines: Option<String>,
+    pub text: String,
 }
 
 #[derive(Deserialize)]
@@ -135,16 +162,17 @@ pub async fn check_perm(
     ask_tx: &Option<AskSender>,
     tool: &str,
     input_key: &str,
-) -> Result<(), ToolError> {
+) -> Result<Option<String>, ToolError> {
     let Some(perm) = permission else {
-        return Ok(());
+        return Ok(None);
     };
     let result = {
         let mut guard = perm.lock().unwrap_or_else(|e| e.into_inner());
         guard.check(tool, input_key)
     };
     match result {
-        CheckResult::Allowed => Ok(()),
+        CheckResult::Allowed => Ok(None),
+        CheckResult::AllowedWithCoaching(msg) => Ok(Some(msg)),
         CheckResult::Denied(reason) => {
             Err(ToolError::Msg(format!("Permission denied: {}", reason)))
         }
@@ -154,7 +182,8 @@ pub async fn check_perm(
                     "Permission denied (non-interactive mode)".to_string(),
                 ));
             };
-            handle_ask_inner(tx, perm, tool, input_key).await
+            handle_ask_inner(tx, perm, tool, input_key).await?;
+            Ok(None)
         }
     }
 }
@@ -164,16 +193,17 @@ pub async fn check_perm_path(
     ask_tx: &Option<AskSender>,
     tool: &str,
     path: &str,
-) -> Result<(), ToolError> {
+) -> Result<Option<String>, ToolError> {
     let Some(perm) = permission else {
-        return Ok(());
+        return Ok(None);
     };
     let result = {
         let mut guard = perm.lock().unwrap_or_else(|e| e.into_inner());
         guard.check_path(tool, path)
     };
     match result {
-        CheckResult::Allowed => Ok(()),
+        CheckResult::Allowed => Ok(None),
+        CheckResult::AllowedWithCoaching(msg) => Ok(Some(msg)),
         CheckResult::Denied(reason) => {
             Err(ToolError::Msg(format!("Permission denied: {}", reason)))
         }
@@ -183,7 +213,8 @@ pub async fn check_perm_path(
                     "Permission denied (non-interactive mode)".to_string(),
                 ));
             };
-            handle_ask_inner(tx, perm, tool, path).await
+            handle_ask_inner(tx, perm, tool, path).await?;
+            Ok(None)
         }
     }
 }

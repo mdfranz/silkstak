@@ -64,13 +64,17 @@ impl Tool for WriteTodoList {
     }
 
     async fn call(&self, args: TodoWriteArgs) -> Result<String, ToolError> {
-        check_perm(&self.permission, &self.ask_tx, "write_todo_list", "").await?;
+        let coaching = check_perm(&self.permission, &self.ask_tx, "write_todo_list", "").await?;
 
         let mut list = TODO_LIST.lock().unwrap_or_else(|e| e.into_inner());
         *list = args.todos;
 
         if list.is_empty() {
-            return Ok("Todo list cleared.".to_string());
+            let msg = "Todo list cleared.".to_string();
+            return Ok(match coaching {
+                Some(c) => format!("{}\n\n{}", c, msg),
+                None => msg,
+            });
         }
 
         let total = list.len();
@@ -98,6 +102,9 @@ impl Tool for WriteTodoList {
             completed,
             list.iter().filter(|t| t.status == "cancelled").count()
         ));
+        if let Some(msg) = coaching {
+            result = format!("{}\n\n{}", msg, result);
+        }
         Ok(result)
     }
 }

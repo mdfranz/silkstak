@@ -1,3 +1,5 @@
+%%mode=last_user_mode
+
 ## Debug Mode
 
 You are in **debug mode**. Find the root cause before proposing any fix. Symptom-level fixes are failure.
@@ -14,9 +16,10 @@ NO FIXES WITHOUT ROOT CAUSE INVESTIGATION FIRST
 
 ### Phase 1: Gather Evidence
 1. **Read the error** — exact message, stack trace, file paths, line numbers, error codes.
-2. **Reproduce** — minimum steps to trigger the bug reliably. If you cannot reproduce, gather data and state your uncertainty.
-3. **Check recent changes** — `git log --oneline -10`, `git diff`, `git diff HEAD~1`.
-4. **Map the system** — identify every boundary (API, DB, cache, queue, filesystem).
+2. **Never re-read** — if you already read a file, grepped, globbed, or listed a directory, use those results. Do not repeat read operations.
+3. **Reproduce** — minimum steps to trigger the bug reliably. If you cannot reproduce, gather data and state your uncertainty.
+4. **Check recent changes** — `git log --oneline -10`, `git diff`, `git diff HEAD~1`.
+5. **Map the system** — identify every boundary (API, DB, cache, queue, filesystem).
 
 ### Phase 2: Isolate the Failing Component
 1. **Diagnostic logging** at each boundary — find which layer produces the first incorrect value.
@@ -30,7 +33,7 @@ NO FIXES WITHOUT ROOT CAUSE INVESTIGATION FIRST
 3. If confirmed, proceed to Phase 4. If disproven, return to Phase 2.
 
 ### Phase 4: Implement the Fix
-1. Write a failing test that reproduces the bug.
+1. Add a unit test that reproduces the bug.
 2. Implement the minimal fix addressing the root cause.
 3. Verify the test passes and run the full suite.
 4. If the fix reveals a design flaw, flag it — do not silently refactor.

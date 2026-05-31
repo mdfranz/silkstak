@@ -66,7 +66,7 @@ impl Tool for ListDirTool {
 
     async fn call(&self, args: ListDirArgs) -> Result<String, ToolError> {
         let path = crate::fs::expand_tilde(args.path.as_deref().unwrap_or("."));
-        check_perm_path(&self.permission, &self.ask_tx, "list_dir", &path).await?;
+        let coaching = check_perm_path(&self.permission, &self.ask_tx, "list_dir", &path).await?;
 
         let walker = WalkBuilder::new(&path)
             .git_ignore(true)
@@ -132,7 +132,11 @@ impl Tool for ListDirTool {
         });
 
         if entries.is_empty() {
-            return Ok(format!("Listing {}:\n(empty directory)", path));
+            let msg = format!("Listing {}:\n(empty directory)", path);
+            return Ok(match coaching {
+                Some(c) => format!("{}\n\n{}", c, msg),
+                None => msg,
+            });
         }
 
         let max_name = entries.iter().map(|e| e.0.len()).max().unwrap_or(0);
@@ -145,6 +149,9 @@ impl Tool for ListDirTool {
                 format!("  {}", size)
             };
             result.push_str(&format!("  [{}]  {}{}\n", kind, padded, size_str));
+        }
+        if let Some(msg) = coaching {
+            result = format!("{}\n\n{}", msg, result);
         }
         Ok(result)
     }

@@ -39,7 +39,9 @@ Example (JSON):
   "compact_enabled": true,
   "default_prompt": "code",
   "default_permission_mode": "standard",
+  "permission-modes": ["guarded", "standard", "yolo"],
   "show_tool_details": false,
+  "sandbox": false,
   "quick_models": {
     "fast": {
       "provider": "openai",
@@ -50,7 +52,8 @@ Example (JSON):
     "local-vllm": {
       "provider_type": "openai",
       "base_url": "http://localhost:8000/v1",
-      "api_key_env": "VLLM_API_KEY"
+      "api_key_env": "VLLM_API_KEY",
+      "model": "gemma4"
     },
     "company-gateway": {
       "provider_type": "openai",
@@ -96,8 +99,10 @@ context_window = 128000
 reserve_tokens = 16384
 keep_recent_tokens = 20000
 compact_enabled = true
+edit_system = "similarity"
 default_prompt = "code"
 default_permission_mode = "standard"
+permission-modes = ["guarded", "standard", "yolo"]
 show_tool_details = false
 
 [quick_models.fast]
@@ -144,19 +149,21 @@ Accepted top-level keys:
 | `keep_recent_tokens`      | integer | Approximate recent-token budget kept verbatim during compaction. Default: `20000`.                                                                                          |
 | `max_text_file_size`      | integer | Maximum allowed file size in bytes for read/write tool operations. Default: `1048576` (1 MB).                                                                               |
 | `compact_enabled`         | boolean | Enable automatic conversation compaction. Default: `true`.                                                                                                                  |
+| `edit_system`             | string  | Edit system mode: `"similarity"` (SEARCH/REPLACE with fuzzy matching, default) or `"hashedit"` (CRC-32 tag-based CAS edits). See Edit System Modes below.                     |
 | `custom_providers`        | object  | Map of provider aliases to `{ "provider_type", "base_url", "api_key_env", "api_style", "headers", "danger_accept_invalid_certs", "timeout_secs" }`. `provider_type` must resolve to a built-in provider type; `api_key_env` is optional. For OpenAI providers, `api_style` selects `"responses"` or `"completions"`, `headers` sets custom HTTP headers (values support `${ENV_VAR}` expansion), and `timeout_secs` overrides the HTTP timeout. `danger_accept_invalid_certs` disables TLS verification. See the OpenAI API styles section below. |
 | `permission`              | object  | Permission rules using glob patterns; see the permission config notes below.                                |
 | `permission-regex`        | object  | Same structure as `permission` but patterns are interpreted as regex instead of glob.                       |
 | `permission-allow`        | object  | Map of tool names to lists of glob patterns to allow. Works alongside the `permission` field. See below.    |
 | `permission-ask`          | object  | Map of tool names to lists of glob patterns to prompt on. Works alongside the `permission` field. See below.|
 | `permission-deny`         | object  | Map of tool names to lists of glob patterns to deny. Works alongside the `permission` field. See below.     |
-| `restrictive`             | boolean | Select restrictive permission mode. Overridden by `accept_all`/`yolo` if those are also true.                                                                               |
-| `accept_all`              | boolean | Select accept mode, equivalent to `--accept-all`. Overridden by `yolo` if true.                                                                                             |
-| `yolo`                    | boolean | Select yolo mode, auto-approving all operations.                                                                                                                            |
+| `restrictive`             | boolean | Select restrictive permission mode (ask for every operation). Overridden by `accept_all`/`yolo` if those are also true.                                                     |
+| `accept_all`              | boolean | Select standard permission mode with auto-allow within CWD (equivalent to `default_permission_mode = "standard"`). Overridden by `yolo` if true.                            |
+| `yolo`                    | boolean | Select yolo mode (allow all, ask for destructive bash commands).                                                                                                            |
+| `permission-modes`        | array   | List of mode names that apply config-based rules. Default: `["guarded", "standard", "yolo"]`. Modes excluded from this list skip config rule matching entirely.             |
 | `sandbox`                 | boolean | Run bash commands in the bubblewrap sandbox. Default: `false`.                                                                                                              |
-| `default_permission_mode` | string  | Permission mode when no mode boolean/CLI flag is set. Use `standard`, `restrictive`, `accept`, or `yolo`.                                                                   |
+| `default_permission_mode` | string  | Permission mode when no mode boolean/CLI flag is set. Accepts: `standard` (default), `restrictive`, `readonly`, `guarded`, `yolo`.                                          |
 | `show_tool_details`       | boolean | Show tool-result previews in the TUI. Default: `false`.                                                                                                                     |
-| `default_prompt`          | string  | Prompt name to activate on startup. Default: `code`.                                                                                                                        |
+| `default_prompt`          | string  | Prompt name to activate on startup. Default: `code`. If the prompt file has a `%%mode=<mode>` first-line directive, the security mode is set automatically (see Prompt directives below). |
 | `editor`                  | string  | Editor command for `Ctrl+G` (default: `$EDITOR` env var, then `editor`, then `nano`).                                                                                        |
 | `api_keys`                | object  | Map of provider names to API keys (e.g. `"openai": "sk-..."`). Used as fallback when the corresponding env var is not set.                                                   |
 | `quick_models`            | object  | Map of quick-model names to `{ "provider", "model" }`. Can be switched with `/models <name>` or `--quick-model=<name>`.                                                      |
@@ -388,3 +395,80 @@ All top-level keys use kebab-case when they contain hyphens (e.g.
 `permission-allow`, `allow-all-mcp-calls`). Simple keys use the same name as
 their JSON counterpart. Quoted keys (`"*"`, `"**"`) are required when the key
 contains special characters like `*` or `/`.
+
+## Edit System Modes
+
+zerostack supports two edit systems, selectable via `edit_system` config key,
+`--edit-system` CLI flag, or `/editsys` slash command:
+
+### `similarity` (default)
+
+The classic aider-style SEARCH/REPLACE format. The LLM copies exact text from
+read output into `<<<<<<< SEARCH` blocks and provides replacements in
+`>>>>>>> REPLACE` blocks. Falls back to whitespace normalization and fuzzy
+matching when the exact text doesn't match.
+
+```
+edit_system = "similarity"
+```
+
+### `hashedit`
+
+Tag-based edits using CRC-32 line hashes and file-level CAS (check-and-set)
+tokens. The read tool annotates each line with an 8-char hex CRC-32 tag (e.g.
+`"  10|f1e2d3c4 int count = 10;"`) and a file-level CRC header. The edit tool
+receives tagged lines from the read output and provides only the replacement
+text — no old-text reproduction needed.
+
+Key advantages:
+- **Token-efficient**: No old-text reproduction (significant savings for
+  deletions and large edits)
+- **CAS-guarded**: File-level CRC prevents applying edits to stale content
+- **Reliable**: Per-line tag validation catches content mismatches
+
+```
+edit_system = "hashedit"
+```
+
+Switching between modes is immediate and does not require agent restart.
+The `/editsys` `similarity` and `/editsys` `hashedit` slash commands
+provide the same functionality at runtime.
+
+## Prompt directives
+
+Custom prompt `.md` files may include a `%%mode=<mode>` directive on the
+**first line** to automatically switch the security mode when the prompt
+is activated (via `/prompt <name>` or as the `default_prompt`).
+
+Valid modes: `standard`, `restrictive`, `readonly`, `guarded`, `yolo`.
+
+Use `%%mode=last_user_mode` to keep (or restore) the mode the user last
+set explicitly via `/mode` or startup config — useful when a prompt wants
+to avoid overriding the user's chosen mode.
+
+The directive line is stripped from the prompt content before it reaches
+the agent.
+
+Example `ask.md`:
+
+```markdown
+%%mode=readonly
+
+## Read-Only Mode
+
+You are in read-only mode. Only read files and explore.
+```
+
+Example `code.md` that defers to the user's mode:
+
+```markdown
+%%mode=last_user_mode
+
+## Coding Mode
+
+Write well-tested code. Follow project conventions.
+```
+
+The mode change is applied when the prompt is activated and persists
+until changed again by `/mode`, another prompt directive, or a restart.
+The status bar shows `| mode:<name>` when the mode is not `standard`.

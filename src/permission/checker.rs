@@ -1,5 +1,5 @@
 use std::collections::{HashMap, VecDeque};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use smallvec::SmallVec;
@@ -12,8 +12,18 @@ pub type PermCheck = Arc<Mutex<PermissionChecker>>;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CheckResult {
     Allowed,
+    AllowedWithCoaching(String),
     Ask,
     Denied(String),
+}
+
+impl CheckResult {
+    pub fn allowed_with_coaching(tool: &str, _input: &str, count: usize) -> Self {
+        CheckResult::AllowedWithCoaching(format!(
+            "⚡ Coaching: You've called {tool} on the same input {count} times in a row. \
+             This looks like a loop — try a different approach.",
+        ))
+    }
 }
 
 pub struct PermissionChecker {
@@ -25,6 +35,9 @@ pub struct PermissionChecker {
     session_allowlist: Vec<(String, Pattern)>,
     recent_calls: VecDeque<(String, String)>,
     mode: SecurityMode,
+    user_mode: SecurityMode,
+    permission_modes: Vec<SecurityMode>,
+    allow_all_mcp_calls: bool,
 }
 
 impl PermissionChecker {
@@ -42,6 +55,7 @@ impl PermissionChecker {
             ("find_files", &config.find_files),
             ("list_dir", &config.list_dir),
             ("write_todo_list", &config.write_todo_list),
+            ("mcp_tool", &config.mcp_tool),
         ] {
             let Some(tp) = tool_perm else { continue };
             let mut entries = Vec::new();
@@ -74,6 +88,7 @@ impl PermissionChecker {
         configs: &PermissionConfigs,
         mode: SecurityMode,
         working_dir: Option<std::path::PathBuf>,
+        permission_modes: Option<Vec<String>>,
     ) -> Self {
         let default_action = configs
             .glob
@@ -136,6 +151,26 @@ impl PermissionChecker {
             .to_string_lossy()
             .to_string();
 
+        let resolved_modes: Vec<SecurityMode> = {
+            let raw = permission_modes.unwrap_or_else(|| {
+                vec![
+                    "guarded".to_string(),
+                    "standard".to_string(),
+                    "yolo".to_string(),
+                ]
+            });
+            raw.into_iter()
+                .filter_map(|s| match s.as_str() {
+                    "restrictive" => Some(SecurityMode::Restrictive),
+                    "readonly" => Some(SecurityMode::ReadOnly),
+                    "guarded" => Some(SecurityMode::Guarded),
+                    "standard" => Some(SecurityMode::Standard),
+                    "yolo" => Some(SecurityMode::Yolo),
+                    _ => None,
+                })
+                .collect()
+        };
+
         PermissionChecker {
             rules,
             default_action,
@@ -145,11 +180,26 @@ impl PermissionChecker {
             session_allowlist: Vec::new(),
             recent_calls: VecDeque::with_capacity(16),
             mode,
+            user_mode: mode,
+            permission_modes: resolved_modes,
+            allow_all_mcp_calls: false,
         }
     }
 
+    fn apply_rules(&self) -> bool {
+        self.permission_modes.contains(&self.mode)
+    }
+
+    fn is_read_tool(&self, tool: &str) -> bool {
+        matches!(tool, "read" | "grep" | "find_files" | "list_dir")
+    }
+
     pub fn check(&mut self, tool: &str, input: &str) -> CheckResult {
-        if self.mode == SecurityMode::Yolo {
+        if tool == "write_todo_list" {
+            return CheckResult::Allowed;
+        }
+
+        if self.allow_all_mcp_calls && tool == "mcp_tool" {
             return CheckResult::Allowed;
         }
 
@@ -158,40 +208,59 @@ impl PermissionChecker {
         }
 
         let mut matched: SmallVec<[Action; 4]> = SmallVec::new();
-        if let Some(rules) = self.rules.get(tool) {
-            for (pattern, action) in rules {
-                if pattern.matches(input) {
-                    matched.push(*action);
+
+        if self.apply_rules() {
+            if let Some(rules) = self.rules.get(tool) {
+                for (pattern, action) in rules {
+                    if pattern.matches(input) {
+                        matched.push(*action);
+                    }
                 }
             }
         }
 
-        let base = matched.last().copied().unwrap_or(self.default_action);
+        let base = matched.last().copied();
         let action = match self.mode {
             SecurityMode::Restrictive => {
-                if matched.is_empty() && self.default_action == Action::Allow {
-                    Action::Ask
+                if let Some(a) = base {
+                    a
                 } else {
-                    base
+                    Action::Ask
                 }
             }
-            SecurityMode::Accept => match base {
-                Action::Ask => {
-                    if self.is_path_tool(tool) && self.is_external_path(input) {
-                        self.match_ext_dir(input).unwrap_or(Action::Ask)
-                    } else {
-                        Action::Allow
-                    }
+            SecurityMode::ReadOnly => {
+                if let Some(a) = base {
+                    a
+                } else if self.is_read_tool(tool) {
+                    Action::Allow
+                } else {
+                    Action::Deny
                 }
-                other => other,
+            }
+            SecurityMode::Guarded => {
+                if let Some(a) = base {
+                    a
+                } else if self.is_read_tool(tool) {
+                    Action::Allow
+                } else {
+                    Action::Ask
+                }
+            }
+            SecurityMode::Standard => base.unwrap_or(self.default_action),
+            SecurityMode::Yolo => match base {
+                Some(Action::Deny) => Action::Ask,
+                Some(other) => other,
+                None => Action::Allow,
             },
-            SecurityMode::Standard => base,
-            SecurityMode::Yolo => unreachable!(),
         };
 
         if action != Action::Deny {
             self.track_doom_loop(tool, input);
             if self.is_doom_loop(tool, input) {
+                if action == Action::Allow {
+                    let count = self.count_doom_loop(tool, input);
+                    return CheckResult::allowed_with_coaching(tool, input, count);
+                }
                 match self.doom_loop_action {
                     Action::Deny => {
                         return CheckResult::Denied(
@@ -212,70 +281,88 @@ impl PermissionChecker {
     }
 
     pub fn check_path(&mut self, tool: &str, path: &str) -> CheckResult {
-        if self.mode == SecurityMode::Yolo {
+        if tool == "write_todo_list" {
             return CheckResult::Allowed;
         }
 
         let expanded = crate::fs::expand_tilde(path);
+        let abs_path = resolve_absolute(&expanded, &self.working_dir);
 
-        if self.is_session_allowed(tool, &expanded) {
+        if self.is_session_allowed(tool, &expanded) || self.is_session_allowed(tool, &abs_path) {
             return CheckResult::Allowed;
         }
 
-        let abs_path = resolve_absolute(&expanded, &self.working_dir);
         let mut matched: SmallVec<[Action; 4]> = SmallVec::new();
-        if let Some(rules) = self.rules.get(tool) {
-            for (pattern, action) in rules {
-                if pattern.matches(&abs_path) || pattern.matches(&expanded) {
-                    matched.push(*action);
+
+        if self.apply_rules() {
+            if let Some(rules) = self.rules.get(tool) {
+                for (pattern, action) in rules {
+                    if pattern.matches(&abs_path) || pattern.matches(&expanded) {
+                        matched.push(*action);
+                    }
                 }
             }
         }
 
-        let base = matched.last().copied().unwrap_or(self.default_action);
+        let base = matched.last().copied();
         let action = match self.mode {
             SecurityMode::Restrictive => {
-                if matched.is_empty() && self.default_action == Action::Allow {
-                    Action::Ask
+                if let Some(a) = base {
+                    a
                 } else {
-                    base
+                    Action::Ask
                 }
             }
-            SecurityMode::Accept => match base {
-                Action::Ask => {
-                    if self.is_external_path(&abs_path) {
-                        self.match_ext_dir(&abs_path).unwrap_or(Action::Ask)
-                    } else {
-                        Action::Allow
-                    }
+            SecurityMode::ReadOnly => {
+                if let Some(a) = base {
+                    a
+                } else if self.is_read_tool(tool) {
+                    Action::Allow
+                } else {
+                    Action::Deny
                 }
-                other => other,
+            }
+            SecurityMode::Guarded => {
+                if let Some(a) = base {
+                    a
+                } else if self.is_read_tool(tool) {
+                    Action::Allow
+                } else {
+                    Action::Ask
+                }
+            }
+            SecurityMode::Standard => {
+                let a = base.unwrap_or(self.default_action);
+                // In Standard mode, if no rule matched, auto-allow path
+                // tools within CWD.
+                if matched.is_empty()
+                    && self.is_path_tool(tool)
+                    && !self.is_external_path(&abs_path)
+                {
+                    Action::Allow
+                } else if matched.is_empty()
+                    && a == Action::Allow
+                    && self.is_external_path(&abs_path)
+                {
+                    self.match_ext_dir(&abs_path).unwrap_or(Action::Ask)
+                } else {
+                    a
+                }
+            }
+            SecurityMode::Yolo => match base {
+                Some(Action::Deny) => Action::Ask,
+                Some(other) => other,
+                None => Action::Allow,
             },
-            SecurityMode::Standard => base,
-            SecurityMode::Yolo => unreachable!(),
-        };
-
-        let action =
-            if matched.is_empty() && action == Action::Allow && self.is_external_path(&abs_path) {
-                Action::Ask
-            } else {
-                action
-            };
-
-        // In Standard mode, always allow file operations within the working directory.
-        // This overrides any configured deny rules for read/write/edit/list_dir on CWD paths.
-        let action = if self.mode == SecurityMode::Standard
-            && self.is_path_tool(tool)
-            && !self.is_external_path(&abs_path)
-        {
-            Action::Allow
-        } else {
-            action
         };
 
         if action != Action::Deny {
             self.track_doom_loop(tool, &expanded);
             if self.is_doom_loop(tool, &expanded) {
+                if action == Action::Allow {
+                    let count = self.count_doom_loop(tool, &expanded);
+                    return CheckResult::allowed_with_coaching(tool, &expanded, count);
+                }
                 match self.doom_loop_action {
                     Action::Deny => {
                         return CheckResult::Denied(
@@ -306,13 +393,28 @@ impl PermissionChecker {
 
     pub fn add_session_allowlist(&mut self, tool: String, pattern_str: &str) {
         let pattern = Pattern::new(pattern_str);
-        self.session_allowlist.push((tool, pattern));
+        self.session_allowlist.push((tool.clone(), pattern));
+        if self.is_path_tool(&tool) {
+            let expanded = crate::fs::expand_tilde(pattern_str);
+            let abs = resolve_absolute(&expanded, &self.working_dir);
+            if abs != expanded {
+                self.session_allowlist.push((tool, Pattern::new(&abs)));
+            }
+        }
     }
 
     pub fn load_session_allowlist(&mut self, entries: &[(String, String)]) {
         for (tool, pat) in entries {
-            self.session_allowlist
-                .push((tool.clone(), Pattern::new(pat)));
+            let pattern = Pattern::new(pat);
+            self.session_allowlist.push((tool.clone(), pattern));
+            if self.is_path_tool(tool) {
+                let expanded = crate::fs::expand_tilde(pat);
+                let abs = resolve_absolute(&expanded, &self.working_dir);
+                if abs != expanded {
+                    self.session_allowlist
+                        .push((tool.clone(), Pattern::new(&abs)));
+                }
+            }
         }
     }
 
@@ -326,10 +428,23 @@ impl PermissionChecker {
 
     pub fn set_mode(&mut self, mode: SecurityMode) {
         self.mode = mode;
+        self.user_mode = mode;
+    }
+
+    pub fn set_prompt_mode(&mut self, mode: SecurityMode) {
+        self.mode = mode;
+    }
+
+    pub fn restore_user_mode(&mut self) {
+        self.mode = self.user_mode;
     }
 
     pub fn mode(&self) -> SecurityMode {
         self.mode
+    }
+
+    pub fn set_allow_all_mcp_calls(&mut self, allow: bool) {
+        self.allow_all_mcp_calls = allow;
     }
 
     fn is_path_tool(&self, tool: &str) -> bool {
@@ -338,11 +453,15 @@ impl PermissionChecker {
 
     fn is_external_path(&self, path_str: &str) -> bool {
         let p = Path::new(path_str);
-        if !p.is_absolute() {
-            return false;
-        }
+        let p = if p.is_absolute() {
+            p.to_path_buf()
+        } else {
+            Path::new(&self.working_dir).join(p)
+        };
         let cwd = Path::new(&self.working_dir);
-        !p.starts_with(cwd)
+        let normalized = normalize_path(&p);
+        let normalized_cwd = normalize_path(cwd);
+        !normalized.starts_with(&normalized_cwd)
     }
 
     fn match_ext_dir(&self, path_str: &str) -> Option<Action> {
@@ -363,12 +482,14 @@ impl PermissionChecker {
     }
 
     fn is_doom_loop(&self, tool: &str, input: &str) -> bool {
-        let count = self
-            .recent_calls
+        self.count_doom_loop(tool, input) >= 3
+    }
+
+    fn count_doom_loop(&self, tool: &str, input: &str) -> usize {
+        self.recent_calls
             .iter()
             .filter(|(t, i)| t == tool && i == input)
-            .count();
-        count >= 3
+            .count()
     }
 }
 
@@ -380,4 +501,20 @@ fn resolve_absolute(path: &str, working_dir: &str) -> String {
     } else {
         Path::new(working_dir).join(p).to_string_lossy().to_string()
     }
+}
+
+fn normalize_path(path: &Path) -> PathBuf {
+    let mut result = PathBuf::new();
+    for component in path.components() {
+        match component {
+            std::path::Component::ParentDir => {
+                result.pop();
+            }
+            std::path::Component::CurDir => {}
+            other => {
+                result.push(other);
+            }
+        }
+    }
+    result
 }
