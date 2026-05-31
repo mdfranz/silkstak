@@ -155,7 +155,7 @@ Three tools are registered when the `memory` feature is enabled:
 
 1. **Tokenization** — query is split on whitespace; duplicate terms are deduplicated preserving order
 2. **Matching** — each term is regex-escaped and matched literally (no regex injection); a line matches if it contains ANY term
-3. **Context expansion** — matched lines are expanded to ±1 line of context; adjacent/overlapping regions are merged, capped at 3 regions per file
+3. **Context expansion** — matched lines are expanded to ±3 lines of context; adjacent/overlapping regions are merged, capped at 5 regions per file
 4. **Filename fallback** — if no content matches but the filename matches, a short preview is produced (ranked below content hits)
 5. **Ranking** — files sorted by:
    1. MEMORY.md first
@@ -203,7 +203,8 @@ Appends the `<memory>...</memory>` block to the system prompt preamble, separate
 
 | Constant | Value | Purpose |
 |---|---|---|
-| `MAX_INJECT_BYTES` | 16,384 (16 KiB) | Hard cap on context-block and search-render output |
+| `MAX_INJECT_BYTES` | 65,536 (64 KiB) | Hard cap on context-block and search-render output |
+| `MAX_WRITE_BYTES` | 65,536 (64 KiB) | Per-call content cap for memory_write (truncated with warning) |
 
 ---
 

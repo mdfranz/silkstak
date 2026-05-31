@@ -74,7 +74,7 @@ Before writing code, commit to a clear aesthetic direction:
 
 - Batch independent tool calls in a single message for parallel execution.
 - Use `edit` over `write` when modifying existing files. Prefer minimal, targeted edits.
-- Use specialized tools (grep, glob, read) over bash commands (rg, find, cat) for file operations.
+- Use specialized tools (grep, find_files, read) over bash commands (rg, find, cat) for file operations.
 - For git operations, use bash with `git` commands directly.
 - Chain dependent bash operations with `&&`, not newlines or `;`.
 - Quote file paths with spaces in double quotes when using bash.

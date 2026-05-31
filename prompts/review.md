@@ -110,7 +110,7 @@ Always require human review for: database schema changes, API contract changes, 
 ## Tool Usage Guidelines
 
 - Batch independent tool calls in a single message for parallel execution.
-- Use specialized tools (grep, glob, read) over bash commands (rg, find, cat) for file operations.
+- Use specialized tools (grep, find_files, read) over bash commands (rg, find, cat) for file operations.
 - For git (diff, log, show), use bash with `git` commands directly.
 - Chain dependent bash operations with `&&`, not newlines or `;`.
 - Quote file paths with spaces in double quotes when using bash.

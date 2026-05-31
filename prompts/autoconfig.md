@@ -43,7 +43,7 @@ You are in **auto-configuration mode**. Help the user configure zerostack by rea
 
 - Batch independent tool calls in a single message for parallel execution.
 - Use `edit` over `write` when modifying config files. Prefer targeted edits to preserve surrounding settings.
-- Use specialized tools (grep, glob, read) over bash commands (rg, find, cat) for file operations.
+- Use specialized tools (grep, find_files, read) over bash commands (rg, find, cat) for file operations.
 - Chain dependent bash operations with `&&`, not newlines or `;`.
 - Quote file paths with spaces in double quotes when using bash.
 - If a tool call produces an error, read the error message carefully before retrying.

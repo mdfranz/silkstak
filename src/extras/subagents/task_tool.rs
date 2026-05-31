@@ -50,7 +50,7 @@ impl Tool for TaskTool {
             description: "Delegate read-only codebase exploration to a subagent. \
 Provide one or more prompts describing what to investigate. \
 Multiple prompts are explored in parallel. \
-The subagent can read, grep, glob, list directories, and access memory. \
+The subagent can read, grep, find_files, list directories, and access memory. \
 Returns a summary of findings for each prompt."
                 .to_string(),
             parameters: serde_json::json!({

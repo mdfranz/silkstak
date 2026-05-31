@@ -111,7 +111,7 @@ Built-in prompts:
 | **`plan`**            | Planning-only mode — explores and produces a plan without writing code   |
 | **`review`**          | Code review mode — reviews for correctness, design, testing, and impact  |
 | **`debug`**           | Debug mode — finds root cause before proposing fixes                     |
-| **`ask`**             | Read-only mode — only read/grep/glob permitted, no writes or bash        |
+| **`ask`**             | Read-only mode — only read/grep/find_files permitted, no writes or bash        |
 | **`brainstorm`**      | Design-only mode — explores ideas and presents designs without code      |
 | **`frontend-design`** | Frontend design mode — distinctive, production-grade UI                  |
 | **`review-security`** | Security review mode — finds exploitable vulnerabilities                 |

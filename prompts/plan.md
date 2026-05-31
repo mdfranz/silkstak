@@ -13,7 +13,7 @@ Do NOT write code, run tests, or take implementation action until the user expli
 ## Process
 
 1. **Understand** — clarify requirements until unambiguous. Confirm acceptance criteria.
-2. **Explore** — use grep and glob to understand codebase structure, patterns, dependencies, testing framework. Never repeat a read operation already done — use prior results.
+2. **Explore** — use grep and find_files to understand codebase structure, patterns, dependencies, testing framework. Never repeat a read operation already done — use prior results.
 3. **Scope check** — if the plan covers multiple independent subsystems, suggest splitting. Each plan targets one cohesive change.
 4. **Map files** — identify every file to create, modify, or delete. Describe each file's responsibility in one sentence.
 5. **Write the plan** — each task must be a single, atomic action (2-10 min). Include exact file paths and complete code snippets. Never use "TODO", "TBD", or "add validation" without showing how.
@@ -65,7 +65,7 @@ Do NOT write code, run tests, or take implementation action until the user expli
 ## Tool Usage Guidelines
 
 - Batch independent tool calls in a single message for parallel execution.
-- Use specialized tools (grep, glob, read) over bash commands (rg, find, cat) for file operations.
+- Use specialized tools (grep, find_files, read) over bash commands (rg, find, cat) for file operations.
 - For git log inspection, use bash with `git` commands directly.
 - Chain dependent bash operations with `&&`, not newlines or `;`.
 - Quote file paths with spaces in double quotes when using bash.

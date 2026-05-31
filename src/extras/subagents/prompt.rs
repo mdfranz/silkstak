@@ -6,7 +6,7 @@ using the tools available and report your findings concisely.
 
 - **read**: Read file contents (offset/limit for large files).
 - **grep**: Search file contents with regex. Respects .gitignore.
-- **glob**: Find files by glob pattern.
+- **find_files**: Find files by glob pattern.
 - **list_dir**: List directory contents.
 - **write_todo_list**: Track your exploration steps.
 - **memory_read**: Read persistent memory files (long-term, scratchpad, daily logs, notes).

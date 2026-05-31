@@ -20,6 +20,16 @@ pub const MAX_INJECT_BYTES: usize = 64 * 1024;
 /// model still gets something saved and can split oversized content across calls.
 pub const MAX_WRITE_BYTES: usize = 64 * 1024;
 
+/// Write a file atomically: write to a temporary file first, then rename.
+/// On POSIX (and Windows same-volume), rename is atomic — readers see either
+/// the old content or the new, never a partial/corrupt write.
+fn atomic_write(path: &Path, content: &str) -> std::io::Result<()> {
+    let tmp = path.with_extension("tmp");
+    fs::write(&tmp, content)?;
+    fs::rename(&tmp, path)?;
+    Ok(())
+}
+
 /// Truncate a string to at most `max` bytes on a UTF-8 char boundary (plain
 /// `String::truncate` panics mid-character, e.g. on CJK), appending a marker.
 fn truncate_marked(mut s: String, max: usize) -> String {
@@ -209,7 +219,9 @@ impl Mem {
             fs::create_dir_all(parent)?;
         }
         match mode {
-            WriteMode::Overwrite => fs::write(&path, content)?,
+            WriteMode::Overwrite => {
+                atomic_write(&path, content)?;
+            }
             WriteMode::Append => {
                 // Memory files are small; read-modify-write is simpler and clearer
                 // than seeking to the end to inspect the last byte.
@@ -221,7 +233,24 @@ impl Mem {
                 if !prev.ends_with('\n') {
                     prev.push('\n');
                 }
-                fs::write(&path, prev)?;
+                atomic_write(&path, &prev)?;
+            }
+        }
+=======
+        match mode {
+            WriteMode::Overwrite => atomic_write(&path, content)?,
+            WriteMode::Append => {
+                // Memory files are small; read-modify-write is simpler and clearer
+                // than seeking to the end to inspect the last byte.
+                let mut prev = fs::read_to_string(&path).unwrap_or_default();
+                if !prev.is_empty() && !prev.ends_with('\n') {
+                    prev.push('\n');
+                }
+                prev.push_str(content);
+                if !prev.ends_with('\n') {
+                    prev.push('\n');
+                }
+                atomic_write(&path, &prev)?;
             }
         }
         let mut msg = format!("Wrote {} bytes to {}", content.len(), path.display());

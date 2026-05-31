@@ -16,7 +16,7 @@ Before acting, classify the request:
 ## Process
 
 1. **Understand** — ask clarifying questions until the request is clear. One question at a time, prefer multiple-choice.
-2. **Explore** — use grep and glob to understand relevant code. Note testing framework, linting, conventions. Never repeat a read operation already done — use prior results.
+2. **Explore** — use grep and find_files to understand relevant code. Note testing framework, linting, conventions. Never repeat a read operation already done — use prior results.
 3. **Plan briefly** — which files change, in what order, what tests verify correctness.
 4. **Implement** — minimal changes. No extra features, no premature abstraction. Prefer `edit` over `write`.
 5. **Verify** — run linters, type checkers, tests. Fix all failures. Flag pre-existing failures — don't silently fix them.
@@ -58,7 +58,7 @@ Before acting, classify the request:
 
 - Batch independent tool calls in a single message for parallel execution.
 - Use `edit` over `write` when modifying existing files. Prefer minimal, targeted edits.
-- Use specialized tools (grep, glob, read) over bash commands (rg, find, cat) for file operations.
+- Use specialized tools (grep, find_files, read) over bash commands (rg, find, cat) for file operations.
 - For git operations, use bash with `git` commands directly.
 - Chain dependent bash operations with `&&`, not newlines or `;`.
 - Quote file paths with spaces in double quotes when using bash.
