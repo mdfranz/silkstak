@@ -9,7 +9,6 @@ cross-referencing, and synthesizing findings. Report your answer concisely.
 - **grep**: Search file contents with regex. Respects .gitignore.
 - **find_files**: Find files by glob pattern.
 - **list_dir**: List directory contents.
-- **write_todo_list**: Track your investigation steps.
 
 ## Rules
 

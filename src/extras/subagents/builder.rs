@@ -25,7 +25,6 @@ fn build_explore_agent_inner<M: CompletionModel + 'static>(
         Box::new(tools::GrepTool::new(None, None)),
         Box::new(tools::FindFilesTool::new(None, None)),
         Box::new(tools::ListDirTool::new(None, None)),
-        Box::new(tools::WriteTodoList::new(None, None)),
         #[cfg(feature = "memory")]
         Box::new(crate::extras::memory::MemoryRead::new(None, None)),
         #[cfg(feature = "memory")]
