@@ -59,8 +59,9 @@ where
         let retry_history: Vec<Message> = history.clone();
 
         let mut stream = agent.stream_chat(prompt, history).await;
-
         let mut last_tool_name: Option<String> = None;
+        let mut tool_interactions: Vec<Message> = Vec::new();
+        let mut retry_count = 0u8;
 
         loop {
             let mut retrying = false;
@@ -85,6 +86,7 @@ where
                         StreamedAssistantContent::ToolCall { tool_call, .. },
                     )) => {
                         last_tool_name = Some(tool_call.function.name.clone());
+                        tool_interactions.push(tool_call.clone().into());
                         let _ = event_tx
                             .send(AgentEvent::ToolCall {
                                 name: CompactString::from(tool_call.function.name),
@@ -111,6 +113,7 @@ where
                                 output: CompactString::from(output),
                             })
                             .await;
+                        tool_interactions.push(tool_result.clone().into());
                     }
                     Ok(MultiTurnStreamItem::FinalResponse(res)) => {
                         let response_text = res.response();
@@ -140,8 +143,10 @@ where
                 }
             }
 
-            if retrying {
+            if retrying && retry_count < 2 {
+                retry_count += 1;
                 let mut new_history = retry_history.clone();
+                new_history.extend(tool_interactions.clone());
                 new_history.push(Message::user(retry_prompt.clone()));
                 new_history.push(Message::assistant(String::new()));
                 stream = agent.stream_chat("Please continue.", new_history).await;
