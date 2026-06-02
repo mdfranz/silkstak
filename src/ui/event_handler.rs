@@ -220,17 +220,7 @@ pub async fn handle_agent_event(
                 if show_details {
                     let sanitized = sanitize_output(&output);
                     let char_count = sanitized.chars().count();
-                    let preview: String = sanitized.chars().take(120).collect();
-                    let preview_trimmed = if char_count > 120 {
-                        format!("{}...", preview)
-                    } else {
-                        preview
-                    };
-                    let summary = if char_count > 120 {
-                        format!("◈ result ({} chars): {}", char_count, preview_trimmed)
-                    } else {
-                        preview_trimmed
-                    };
+                    let summary = format!("◈ result ({} chars):\n{}", char_count, sanitized);
                     renderer.write_line(&summary, Color::DarkGrey)?;
                 }
             }

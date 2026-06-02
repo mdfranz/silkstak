@@ -84,12 +84,14 @@ pub(crate) fn format_tool_call_summary(name: &str, args: &serde_json::Value) -> 
     let mut shown = Vec::new();
     for key in primary_keys {
         if let Some(serde_json::Value::String(val)) = obj.get(*key) {
-            let truncated = if val.len() > 60 {
+            let display_val = if name == "bash" {
+                val.clone()
+            } else if val.len() > 60 {
                 format!("\"{}...\"", &val[..57])
             } else {
                 format!("\"{}\"", val)
             };
-            shown.push(truncated);
+            shown.push(display_val);
         }
     }
 
