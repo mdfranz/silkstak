@@ -98,9 +98,20 @@ pub fn convert_history(session: &Session) -> Vec<Message> {
     let extra = if summary.is_some() { 1 } else { 0 };
     let mut messages = Vec::with_capacity(remaining + extra);
 
+    // The compaction summary is emitted as an Assistant message rather
+    // than a System message: the agent already has a System preamble
+    // (SYSTEM_PROMPT + mode prompt + context files), and some model chat
+    // templates (notably Qwen 3.x) refuse any System message past
+    // position 0. Assistant role also produces clean User↔Assistant
+    // alternation when the next user prompt arrives, which reads as
+    // "the agent recaps what it did, then the user continues" — a
+    // natural resumed-conversation shape. The "[Recap of my prior work
+    // in this conversation]" prefix labels the message as a self-recap
+    // so the agent doesn't treat it as a fresh continuation of its own
+    // voice.
     if let Some(summary) = summary {
-        messages.push(Message::system(format!(
-            "[Previous conversation summary]\n{}",
+        messages.push(Message::assistant(format!(
+            "[Recap of my prior work in this conversation]\n{}",
             summary
         )));
     }
@@ -109,7 +120,12 @@ pub fn convert_history(session: &Session) -> Vec<Message> {
         match msg.role {
             MessageRole::User => messages.push(Message::user(msg.content.to_string())),
             MessageRole::Assistant => messages.push(Message::assistant(msg.content.to_string())),
-            MessageRole::System => messages.push(Message::system(msg.content.to_string())),
+            // Convert any persisted System messages to Assistant for the
+            // same reason as the summary above: the templates that reject
+            // mid-stream System tolerate Assistant, and code-symmetry with
+            // the summary push keeps the resumed-conversation shape
+            // consistent.
+            MessageRole::System => messages.push(Message::assistant(msg.content.to_string())),
         }
     }
 
