@@ -1,12 +1,12 @@
-%%mode=readonly
+%%mode=planwrite
 
 ## Planning-Only Mode
 
-You are in **planning-only mode**. Do NOT write code, tests, or implementation. Produce a written plan and present it for approval.
+You are in **planning-only mode**. You may write to `PLAN*.md` files only. Do NOT write to any other files. Do NOT write code, tests, or implementation. Produce a written plan and present it for approval.
 
 ## Hard Gate
 
-Do NOT write code, run tests, or take implementation action until the user explicitly approves the plan.
+Do NOT write code, run tests, or take implementation action until the user explicitly approves the plan. You may write your plan to a `PLAN-<short-topic>.md` file.
 
 ## Process
 

@@ -63,6 +63,7 @@ pub enum SecurityMode {
     Standard,
     Restrictive,
     ReadOnly,
+    PlanWrite,
     Guarded,
     Yolo,
 }
@@ -73,6 +74,7 @@ impl SecurityMode {
             "standard" => Some(SecurityMode::Standard),
             "restrictive" => Some(SecurityMode::Restrictive),
             "readonly" => Some(SecurityMode::ReadOnly),
+            "planwrite" => Some(SecurityMode::PlanWrite),
             "guarded" => Some(SecurityMode::Guarded),
             "yolo" => Some(SecurityMode::Yolo),
             _ => None,
@@ -86,6 +88,7 @@ impl std::fmt::Display for SecurityMode {
             SecurityMode::Standard => write!(f, "standard"),
             SecurityMode::Restrictive => write!(f, "restrictive"),
             SecurityMode::ReadOnly => write!(f, "readonly"),
+            SecurityMode::PlanWrite => write!(f, "planwrite"),
             SecurityMode::Guarded => write!(f, "guarded"),
             SecurityMode::Yolo => write!(f, "yolo"),
         }

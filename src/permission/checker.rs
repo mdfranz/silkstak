@@ -170,6 +170,7 @@ impl PermissionChecker {
                 .filter_map(|s| match s.as_str() {
                     "restrictive" => Some(SecurityMode::Restrictive),
                     "readonly" => Some(SecurityMode::ReadOnly),
+                    "planwrite" => Some(SecurityMode::PlanWrite),
                     "guarded" => Some(SecurityMode::Guarded),
                     "standard" => Some(SecurityMode::Standard),
                     "yolo" => Some(SecurityMode::Yolo),
@@ -205,7 +206,7 @@ impl PermissionChecker {
         let base = matched.last().copied();
         match self.mode {
             SecurityMode::Restrictive => base.unwrap_or(Action::Ask),
-            SecurityMode::ReadOnly => base.unwrap_or_else(|| {
+            SecurityMode::ReadOnly | SecurityMode::PlanWrite => base.unwrap_or_else(|| {
                 if self.is_read_tool(tool) {
                     Action::Allow
                 } else {
@@ -239,6 +240,15 @@ impl PermissionChecker {
             SecurityMode::Restrictive => base.unwrap_or(Action::Ask),
             SecurityMode::ReadOnly => base.unwrap_or_else(|| {
                 if self.is_read_tool(tool) {
+                    Action::Allow
+                } else {
+                    Action::Deny
+                }
+            }),
+            SecurityMode::PlanWrite => base.unwrap_or_else(|| {
+                if self.is_read_tool(tool) {
+                    Action::Allow
+                } else if matches!(tool, "write" | "edit") && is_plan_file(abs_path) {
                     Action::Allow
                 } else {
                     Action::Deny
@@ -479,4 +489,11 @@ fn normalize_path(path: &Path) -> PathBuf {
         }
     }
     result
+}
+
+fn is_plan_file(path: &str) -> bool {
+    Path::new(path)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .is_some_and(|name| name.starts_with("PLAN") && name.ends_with(".md"))
 }
