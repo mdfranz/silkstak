@@ -2,7 +2,7 @@ use std::io::{self, Write};
 
 use compact_str::CompactString;
 use crossterm::ExecutableCommand;
-use crossterm::cursor::{Hide, MoveTo, Show};
+use crossterm::cursor::{Hide, MoveTo, SetCursorStyle, Show};
 use crossterm::style::{
     Attribute, Color, ResetColor, SetAttribute, SetBackgroundColor, SetForegroundColor,
 };
@@ -31,6 +31,10 @@ pub struct Renderer {
     chat_bg: Option<Color>,
     input_bg: Option<Color>,
     status_bg: Option<Color>,
+    text_color: Color,
+    user_color: Color,
+    status_color: Color,
+    cursor_style: Option<SetCursorStyle>,
     pub selection_active: bool,
     pub selection_start: Option<usize>,
     pub selection_end: Option<usize>,
@@ -52,6 +56,10 @@ impl Renderer {
             chat_bg: None,
             input_bg: None,
             status_bg: None,
+            text_color: Color::White,
+            user_color: Color::Green,
+            status_color: Color::Grey,
+            cursor_style: None,
             selection_active: false,
             selection_start: None,
             selection_end: None,
@@ -72,6 +80,26 @@ impl Renderer {
         self.chat_bg = chat_bg;
         self.input_bg = input_bg;
         self.status_bg = status_bg;
+    }
+
+    pub fn set_text_color(&mut self, c: Color) {
+        self.text_color = c;
+    }
+    pub fn set_user_color(&mut self, c: Color) {
+        self.user_color = c;
+    }
+    pub fn set_status_color(&mut self, c: Color) {
+        self.status_color = c;
+    }
+    pub fn set_cursor_style(&mut self, style: SetCursorStyle) {
+        self.cursor_style = Some(style);
+    }
+
+    pub fn text_color(&self) -> Color {
+        self.color(self.text_color)
+    }
+    pub fn user_color(&self) -> Color {
+        self.color(self.user_color)
     }
 
     fn color(&self, color: Color) -> Color {
@@ -699,7 +727,7 @@ impl Renderer {
         write!(
             stdout,
             "{}",
-            SetForegroundColor(self.color(Color::DarkGrey))
+            SetForegroundColor(self.color(self.status_color))
         )?;
         let status_display = if self.scroll_offset > 0 {
             format!("-- SCROLL -- {}", status)
@@ -718,6 +746,9 @@ impl Renderer {
         let cursor_x = (prompt_width + cursor_display_col.saturating_sub(h_scroll)) as u16;
         stdout.execute(MoveTo(cursor_x, cursor_row))?;
         write!(stdout, "{}", Show)?;
+        if let Some(style) = self.cursor_style {
+            write!(stdout, "{}", style)?;
+        }
         stdout.flush()?;
         Ok(())
     }

@@ -44,7 +44,7 @@ use crate::ui::slash::{handle_compress, handle_slash};
 use crate::ui::status::StatusLine;
 use crate::ui::terminal::TerminalGuard;
 
-use self::utils::parse_color;
+use self::utils::{parse_color, parse_cursor_style};
 
 pub(crate) fn apply_current_prompt_mode(
     context: &mut ContextFiles,
@@ -315,6 +315,18 @@ pub async fn run_interactive(
         let input_bg = colors.input_background.as_deref().and_then(parse_color);
         let status_bg = colors.status_background.as_deref().and_then(parse_color);
         renderer.set_background_colors(chat_bg, input_bg, status_bg);
+        if let Some(c) = colors.text_color.as_deref().and_then(parse_color) {
+            renderer.set_text_color(c);
+        }
+        if let Some(c) = colors.user_color.as_deref().and_then(parse_color) {
+            renderer.set_user_color(c);
+        }
+        if let Some(c) = colors.status_color.as_deref().and_then(parse_color) {
+            renderer.set_status_color(c);
+        }
+        if let Some(style) = colors.cursor_style.as_deref().and_then(parse_cursor_style) {
+            renderer.set_cursor_style(style);
+        }
     }
     let mut input = InputEditor::new();
     input.set_monochrome(cli.no_color);

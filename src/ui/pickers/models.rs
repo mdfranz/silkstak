@@ -177,6 +177,6 @@ impl ModelsPicker {
             write!(stdout, "{}", ResetColor)?;
         }
 
-        draw_picker_list(&self.matches, self.selected, self.monochrome, None, 5)
+        draw_picker_list(&self.matches, self.selected, self.monochrome, None, 5, &[])
     }
 }

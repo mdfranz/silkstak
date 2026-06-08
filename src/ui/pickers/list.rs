@@ -1,44 +1,46 @@
+use std::collections::HashMap;
+
 use super::draw_picker_list;
 
-const COMMANDS: &[&str] = &[
-    "/add",
-    "/drop",
-    "/drop-all",
-    "/init",
-    "/memory",
-    "/model",
-    "/models",
-    "/models-add",
-    "/provider",
-    "/sessions",
-    "/reasoning",
-    "/thinking",
-    "/mode",
-    "/mcp",
-    "/toggle",
-    "/compress",
-    "/compact",
-    "/loop",
-    "/prompt",
-    "/theme",
-    "/history",
-    "/regen-prompts",
-    "/regen-themes",
-    "/editsys",
-    "/quit",
-    "/exit",
-    "/clear",
-    "/new",
-    "/undo",
-    "/retry",
-    "/help",
-    "/welcome",
-    "/tutorial",
-    "/worktree",
-    "/wt-merge",
-    "/wt-exit",
-    "/btw",
-    "/queue",
+const COMMANDS: &[(&str, &str)] = &[
+    ("/add", "attach a file or URL to context"),
+    ("/drop", "remove a context file"),
+    ("/drop-all", "clear all context files"),
+    ("/init", "generate AGENTS.md for this project"),
+    ("/memory", "view or edit memory files"),
+    ("/model", "switch the active model"),
+    ("/models", "search and switch model"),
+    ("/models-add", "save a quick-model alias"),
+    ("/provider", "switch provider"),
+    ("/sessions", "list and resume past sessions"),
+    ("/reasoning", "toggle extended reasoning"),
+    ("/thinking", "alias for /reasoning"),
+    ("/mode", "change permission mode"),
+    ("/mcp", "list connected MCP servers"),
+    ("/toggle", "toggle a boolean config flag"),
+    ("/compress", "summarise context to free token budget"),
+    ("/compact", "alias for /compress"),
+    ("/loop", "repeat a prompt on an interval"),
+    ("/prompt", "list and activate system prompts"),
+    ("/theme", "list and apply colour themes"),
+    ("/history", "show recent input history"),
+    ("/regen-prompts", "re-extract built-in prompts to disk"),
+    ("/regen-themes", "re-extract built-in themes to disk"),
+    ("/editsys", "open system prompt in $EDITOR"),
+    ("/quit", "exit zerostack"),
+    ("/exit", "alias for /quit"),
+    ("/clear", "clear the current session"),
+    ("/new", "start a new session"),
+    ("/undo", "undo the last exchange"),
+    ("/retry", "re-run the last user message"),
+    ("/help", "show all commands"),
+    ("/welcome", "show the quickstart screen"),
+    ("/tutorial", "run the interactive tutorial"),
+    ("/worktree", "create a git worktree for isolation"),
+    ("/wt-merge", "merge the current worktree back"),
+    ("/wt-exit", "exit the current worktree"),
+    ("/btw", "send a side note while agent is running"),
+    ("/queue", "queue a message while agent is running"),
 ];
 
 pub struct ListPicker {
@@ -48,6 +50,8 @@ pub struct ListPicker {
     pub matches: Vec<String>,
     pub selected: usize,
     items: Vec<String>,
+    descriptions: HashMap<String, String>,
+    match_descriptions: Vec<Option<String>>,
     monochrome: bool,
 }
 
@@ -60,13 +64,19 @@ impl ListPicker {
             matches: Vec::new(),
             selected: 0,
             items: Vec::new(),
+            descriptions: HashMap::new(),
+            match_descriptions: Vec::new(),
             monochrome: false,
         }
     }
 
     pub fn with_static_commands() -> Self {
         let mut picker = ListPicker::new();
-        picker.items = COMMANDS.iter().map(|s| s.to_string()).collect();
+        picker.items = COMMANDS.iter().map(|(name, _)| name.to_string()).collect();
+        picker.descriptions = COMMANDS
+            .iter()
+            .map(|(name, desc)| (name.to_string(), desc.to_string()))
+            .collect();
         picker
     }
 
@@ -126,6 +136,11 @@ impl ListPicker {
             .take(50)
             .cloned()
             .collect();
+        self.match_descriptions = self
+            .matches
+            .iter()
+            .map(|m| self.descriptions.get(m).cloned())
+            .collect();
         self.selected = 0;
     }
 
@@ -159,6 +174,7 @@ impl ListPicker {
             self.monochrome,
             empty_message,
             4,
+            &self.match_descriptions,
         )
     }
 }

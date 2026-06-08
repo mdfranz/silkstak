@@ -74,4 +74,8 @@ pub struct ColorsConfig {
     pub chat_background: Option<CompactString>,
     pub input_background: Option<CompactString>,
     pub status_background: Option<CompactString>,
+    pub text_color: Option<CompactString>,
+    pub user_color: Option<CompactString>,
+    pub status_color: Option<CompactString>,
+    pub cursor_style: Option<CompactString>,
 }

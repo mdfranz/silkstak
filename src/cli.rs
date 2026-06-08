@@ -5,7 +5,7 @@ use crate::config;
 use crate::config::types::EditSystem;
 
 #[derive(Parser, Debug, Default)]
-#[command(name = "zerostack", version, about = "Minimal coding agent")]
+#[command(name = "zerostack", version = concat!(env!("CARGO_PKG_VERSION"), " (", env!("GIT_COMMIT_HASH"), ")"), about = "Minimal coding agent")]
 pub struct Cli {
     #[arg(short = 'p', long = "print", help = "Print response and exit")]
     pub print: bool,

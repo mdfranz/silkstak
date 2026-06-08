@@ -5,7 +5,7 @@ use include_dir::{Dir, include_dir};
 
 use crate::config::ColorsConfig;
 use crate::ui::renderer::Renderer;
-use crate::ui::utils::parse_color;
+use crate::ui::utils::{parse_color, parse_cursor_style};
 
 static EMBEDDED: Dir = include_dir!("$CARGO_MANIFEST_DIR/themes");
 
@@ -48,5 +48,17 @@ pub fn apply(content: &str, renderer: &mut Renderer) {
         let input_bg = colors.input_background.as_deref().and_then(parse_color);
         let status_bg = colors.status_background.as_deref().and_then(parse_color);
         renderer.set_background_colors(chat_bg, input_bg, status_bg);
+        if let Some(c) = colors.text_color.as_deref().and_then(parse_color) {
+            renderer.set_text_color(c);
+        }
+        if let Some(c) = colors.user_color.as_deref().and_then(parse_color) {
+            renderer.set_user_color(c);
+        }
+        if let Some(c) = colors.status_color.as_deref().and_then(parse_color) {
+            renderer.set_status_color(c);
+        }
+        if let Some(style) = colors.cursor_style.as_deref().and_then(parse_cursor_style) {
+            renderer.set_cursor_style(style);
+        }
     }
 }

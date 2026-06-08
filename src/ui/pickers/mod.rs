@@ -72,6 +72,7 @@ pub(crate) fn draw_picker_list(
     monochrome: bool,
     empty_message: Option<&str>,
     bottom_reserved: u16,
+    descriptions: &[Option<String>],
 ) -> std::io::Result<()> {
     let (cols, rows) = crossterm::terminal::size()?;
     let mut stdout = std::io::stdout();
@@ -81,7 +82,7 @@ pub(crate) fn draw_picker_list(
     if matches.is_empty() {
         let r = rows.saturating_sub(3);
         stdout.execute(MoveTo(0, r))?;
-        let color = resolve_color(Color::DarkGrey, monochrome);
+        let color = resolve_color(Color::Grey, monochrome);
         write!(stdout, "{}", SetForegroundColor(color))?;
         write!(stdout, "{}", empty_message.unwrap_or("no matches"))?;
         write!(stdout, "{}", ResetColor)?;
@@ -111,7 +112,8 @@ pub(crate) fn draw_picker_list(
             Clear(crossterm::terminal::ClearType::CurrentLine)
         )?;
 
-        let truncated: String = item.chars().take(cols.saturating_sub(3) as usize).collect();
+        let desc = descriptions.get(i).and_then(|d| d.as_deref());
+        let max_name = cols.saturating_sub(3) as usize;
 
         if i == selected {
             write!(
@@ -119,14 +121,44 @@ pub(crate) fn draw_picker_list(
                 "{}",
                 SetForegroundColor(resolve_color(Color::Green, monochrome))
             )?;
+            let truncated: String = item.chars().take(max_name).collect();
             write!(stdout, "▸ {}", truncated)?;
+            if let Some(d) = desc {
+                let used = 2 + truncated.chars().count();
+                let avail = (cols as usize).saturating_sub(used + 2);
+                if avail > 4 {
+                    let d_truncated: String = d.chars().take(avail).collect();
+                    write!(stdout, "{}", ResetColor)?;
+                    write!(
+                        stdout,
+                        "{}",
+                        SetForegroundColor(resolve_color(Color::DarkGrey, monochrome))
+                    )?;
+                    write!(stdout, "  {}", d_truncated)?;
+                }
+            }
         } else {
             write!(
                 stdout,
                 "{}",
-                SetForegroundColor(resolve_color(Color::DarkGrey, monochrome))
+                SetForegroundColor(resolve_color(Color::Grey, monochrome))
             )?;
+            let truncated: String = item.chars().take(max_name).collect();
             write!(stdout, "  {}", truncated)?;
+            if let Some(d) = desc {
+                let used = 2 + truncated.chars().count();
+                let avail = (cols as usize).saturating_sub(used + 2);
+                if avail > 4 {
+                    let d_truncated: String = d.chars().take(avail).collect();
+                    write!(stdout, "{}", ResetColor)?;
+                    write!(
+                        stdout,
+                        "{}",
+                        SetForegroundColor(resolve_color(Color::DarkGrey, monochrome))
+                    )?;
+                    write!(stdout, "  {}", d_truncated)?;
+                }
+            }
         }
         write!(stdout, "{}", ResetColor)?;
     }

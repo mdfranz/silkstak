@@ -116,6 +116,7 @@ async fn apply_model(ctx: &mut SlashCtx<'_>, model_id: &str) {
         .await,
     );
     ctx.session.model = new_model.clone();
+    let _ = config::save_provider_and_model(&ctx.session.provider, model_id);
     write_ok(ctx.renderer, format!("switched to model: {}", new_model));
 }
 
@@ -151,6 +152,7 @@ async fn handle_provider(parts: &[&str], ctx: &mut SlashCtx<'_>) -> anyhow::Resu
     ctx.rebuild_agent_with_client(new_provider, *ctx.reasoning_enabled)
         .await?;
     ctx.session.provider = compact_str::CompactString::new(new_provider);
+    let _ = config::save_provider_and_model(new_provider, &ctx.session.model);
     write_ok(
         ctx.renderer,
         format!(
@@ -187,7 +189,7 @@ async fn handle_model(parts: &[&str], ctx: &mut SlashCtx<'_>) -> anyhow::Result<
         .await,
     );
     ctx.session.model = new_model.clone();
-    ctx.session.provider = ctx.cli.resolve_provider(ctx.cfg);
+    let _ = config::save_provider_and_model(&ctx.session.provider, &new_model);
     write_ok(ctx.renderer, format!("switched to model: {}", new_model));
     Ok(())
 }

@@ -150,6 +150,9 @@ pub struct Config {
     pub subagent_provider: Option<CompactString>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub colors: Option<types::ColorsConfig>,
+    #[cfg(feature = "archmd")]
+    #[serde(skip_serializing_if = "Option::is_none", rename = "arch-prompt")]
+    pub arch_prompt: Option<bool>,
 }
 
 impl Config {

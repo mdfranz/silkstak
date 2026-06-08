@@ -52,8 +52,70 @@ pub fn config_file_path() -> PathBuf {
 
 fn default_quick_models() -> HashMap<String, QuickModelConfig> {
     let mut map = HashMap::new();
+
+    // Anthropic
     map.insert(
-        "deepseek-v4-flash".to_string(),
+        "haiku".to_string(),
+        QuickModelConfig {
+            provider: CompactString::new("anthropic"),
+            model: CompactString::new("claude-haiku-4-5"),
+            input_token_cost: 0.0,
+            output_token_cost: 0.0,
+        },
+    );
+    map.insert(
+        "sonnet".to_string(),
+        QuickModelConfig {
+            provider: CompactString::new("anthropic"),
+            model: CompactString::new("claude-sonnet-4-6"),
+            input_token_cost: 0.0,
+            output_token_cost: 0.0,
+        },
+    );
+
+    // OpenAI
+    map.insert(
+        "gpt-mini".to_string(),
+        QuickModelConfig {
+            provider: CompactString::new("openai"),
+            model: CompactString::new("gpt-5-mini"),
+            input_token_cost: 0.0,
+            output_token_cost: 0.0,
+        },
+    );
+    map.insert(
+        "gpt".to_string(),
+        QuickModelConfig {
+            provider: CompactString::new("openai"),
+            model: CompactString::new("gpt-5"),
+            input_token_cost: 0.0,
+            output_token_cost: 0.0,
+        },
+    );
+
+    // Gemini
+    map.insert(
+        "gemini-flash".to_string(),
+        QuickModelConfig {
+            provider: CompactString::new("gemini"),
+            model: CompactString::new("gemini-3.5-flash"),
+            input_token_cost: 0.0,
+            output_token_cost: 0.0,
+        },
+    );
+    map.insert(
+        "gemini-pro".to_string(),
+        QuickModelConfig {
+            provider: CompactString::new("gemini"),
+            model: CompactString::new("gemini-2.5-pro"),
+            input_token_cost: 0.0,
+            output_token_cost: 0.0,
+        },
+    );
+
+    // OpenRouter / DeepSeek
+    map.insert(
+        "deepseek-flash".to_string(),
         QuickModelConfig {
             provider: CompactString::new("openrouter"),
             model: CompactString::new("deepseek/deepseek-v4-flash"),
@@ -62,7 +124,7 @@ fn default_quick_models() -> HashMap<String, QuickModelConfig> {
         },
     );
     map.insert(
-        "deepseek-v4-pro".to_string(),
+        "deepseek-pro".to_string(),
         QuickModelConfig {
             provider: CompactString::new("openrouter"),
             model: CompactString::new("deepseek/deepseek-v4-pro"),
@@ -70,6 +132,7 @@ fn default_quick_models() -> HashMap<String, QuickModelConfig> {
             output_token_cost: 0.87,
         },
     );
+
     map
 }
 
@@ -81,6 +144,43 @@ pub fn quick_models_map(cfg: &Config) -> HashMap<String, QuickModelConfig> {
         }
     }
     map
+}
+
+pub fn save_provider_and_model(provider: &str, model: &str) -> std::io::Result<()> {
+    let path = resolve_config_path();
+    let mut cfg: Config = if path.exists() {
+        let content = std::fs::read_to_string(&path).unwrap_or_default();
+        match path.extension().and_then(|e| e.to_str()) {
+            Some("toml") => toml::from_str(&content).unwrap_or_default(),
+            _ => serde_json::from_str(&content).unwrap_or_default(),
+        }
+    } else {
+        Config::default()
+    };
+
+    cfg.provider = Some(CompactString::new(provider));
+    cfg.model = Some(CompactString::new(model));
+
+    // If this is a known custom provider, also update its model field so that
+    // default_model_for_provider will return the right value on the next start.
+    if let Some(ref mut providers) = cfg.custom_providers {
+        if let Some(entry) = providers.get_mut(provider) {
+            entry.model = Some(CompactString::new(model));
+        }
+    }
+
+    let parent = path.parent().ok_or_else(|| {
+        std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid config path")
+    })?;
+    std::fs::create_dir_all(parent)?;
+    match path.extension().and_then(|e| e.to_str()) {
+        Some("toml") => {
+            let content = toml::to_string(&cfg).map_err(std::io::Error::other)?;
+            std::fs::write(&path, content)?;
+        }
+        _ => std::fs::write(&path, serde_json::to_string_pretty(&cfg)?)?,
+    }
+    Ok(())
 }
 
 pub fn save_quick_model(
@@ -129,8 +229,7 @@ pub fn save_quick_model(
 fn rich_default_config() -> Config {
     let mut cfg = Config::default();
     cfg.quick_models = Some(default_quick_models());
-    cfg.provider = Some(CompactString::new("openrouter"));
-    cfg.model = Some(CompactString::new("deepseek/deepseek-v4-pro"));
+    cfg.provider = Some(CompactString::new("auto"));
     cfg.max_tokens = Some(16384);
     cfg.context_window = Some(128_000);
     cfg.compact_enabled = Some(true);
@@ -139,7 +238,7 @@ fn rich_default_config() -> Config {
     cfg.default_permission_mode = Some("standard".to_string());
     cfg.default_prompt = Some(CompactString::new("code"));
     cfg.show_tool_details = Some(ShowToolDetails::Lines(1));
-    cfg.subagent_model = Some(CompactString::new("deepseek-v4-flash"));
+    cfg.subagent_model = Some(CompactString::new("haiku"));
     #[cfg(feature = "subagents")]
     {
         cfg.subagent_max_read_lines = Some(2000);

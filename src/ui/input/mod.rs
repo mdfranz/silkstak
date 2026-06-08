@@ -440,6 +440,23 @@ impl InputEditor {
                 if c == '/' && self.cursor == 0 {
                     self.start_command_picker();
                 }
+                if c == ' ' && self.picker.is_none() {
+                    match self.buffer.trim_end_matches(' ') {
+                        "/prompt" if !self.prompt_names.is_empty() => {
+                            self.start_prompt_picker();
+                        }
+                        "/theme" if !self.theme_names.is_empty() => {
+                            self.start_theme_picker();
+                        }
+                        "/provider" if !self.provider_names.is_empty() => {
+                            self.start_provider_picker();
+                        }
+                        "/models" => {
+                            self.start_models_picker();
+                        }
+                        _ => {}
+                    }
+                }
                 if c == '.' && self.cursor == 0 {
                     self.buffer.insert(self.cursor, c);
                     self.cursor += c.len_utf8();
@@ -453,59 +470,59 @@ impl InputEditor {
                 self.draft = None;
                 self.yank_pos = None;
 
-                if (self.picker.is_none() || !self.picker.as_ref().is_some_and(|p| p.active()))
+                if !self.picker.as_ref().is_some_and(|p| p.active())
                     && self.buffer.starts_with("/prompt ")
+                    && c != ' '
                 {
                     let after_prefix: String = self.buffer.chars().skip("/prompt ".len()).collect();
-                    if !after_prefix.is_empty() && c != ' ' {
-                        let query_len = after_prefix.len();
-                        if query_len == 1 {
-                            self.start_prompt_picker();
-                            if let Some(Picker::Prefixed(ref mut pp, _)) = self.picker {
-                                pp.char_input(c);
+                    if !after_prefix.is_empty() {
+                        self.start_prompt_picker();
+                        if let Some(Picker::Prefixed(ref mut pp, _)) = self.picker {
+                            for ch in after_prefix.chars() {
+                                pp.char_input(ch);
                             }
                         }
                     }
                 }
-                if (self.picker.is_none() || !self.picker.as_ref().is_some_and(|p| p.active()))
+                if !self.picker.as_ref().is_some_and(|p| p.active())
                     && self.buffer.starts_with("/models ")
+                    && c != ' '
                 {
                     let after_prefix: String = self.buffer.chars().skip("/models ".len()).collect();
-                    if !after_prefix.is_empty() && c != ' ' {
-                        let query_len = after_prefix.len();
-                        if query_len == 1 {
-                            self.start_models_picker();
-                            if let Some(Picker::Models(ref mut mp)) = self.picker {
-                                mp.char_input(c);
+                    if !after_prefix.is_empty() {
+                        self.start_models_picker();
+                        if let Some(Picker::Models(ref mut mp)) = self.picker {
+                            for ch in after_prefix.chars() {
+                                mp.char_input(ch);
                             }
                         }
                     }
                 }
-                if (self.picker.is_none() || !self.picker.as_ref().is_some_and(|p| p.active()))
+                if !self.picker.as_ref().is_some_and(|p| p.active())
                     && self.buffer.starts_with("/theme ")
+                    && c != ' '
                 {
                     let after_prefix: String = self.buffer.chars().skip("/theme ".len()).collect();
-                    if !after_prefix.is_empty() && c != ' ' {
-                        let query_len = after_prefix.len();
-                        if query_len == 1 {
-                            self.start_theme_picker();
-                            if let Some(Picker::Prefixed(ref mut tp, _)) = self.picker {
-                                tp.char_input(c);
+                    if !after_prefix.is_empty() {
+                        self.start_theme_picker();
+                        if let Some(Picker::Prefixed(ref mut tp, _)) = self.picker {
+                            for ch in after_prefix.chars() {
+                                tp.char_input(ch);
                             }
                         }
                     }
                 }
-                if (self.picker.is_none() || !self.picker.as_ref().is_some_and(|p| p.active()))
+                if !self.picker.as_ref().is_some_and(|p| p.active())
                     && self.buffer.starts_with("/provider ")
+                    && c != ' '
                 {
                     let after_prefix: String =
                         self.buffer.chars().skip("/provider ".len()).collect();
-                    if !after_prefix.is_empty() && c != ' ' {
-                        let query_len = after_prefix.len();
-                        if query_len == 1 {
-                            self.start_provider_picker();
-                            if let Some(Picker::Prefixed(ref mut pp, _)) = self.picker {
-                                pp.char_input(c);
+                    if !after_prefix.is_empty() {
+                        self.start_provider_picker();
+                        if let Some(Picker::Prefixed(ref mut pp, _)) = self.picker {
+                            for ch in after_prefix.chars() {
+                                pp.char_input(ch);
                             }
                         }
                     }

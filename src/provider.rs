@@ -66,6 +66,27 @@ pub fn parse_provider(name: &str) -> Option<ProviderKind> {
     ProviderKind::from_name(name)
 }
 
+/// Checks well-known API key environment variables in priority order
+/// (Anthropic → OpenAI → Gemini) and returns the first provider whose key is
+/// set, paired with a sensible fast/cheap default model.  Returns `None` if
+/// no key is found.
+pub fn resolve_auto() -> Option<(compact_str::CompactString, compact_str::CompactString)> {
+    const CANDIDATES: &[(&str, &str, &str)] = &[
+        ("ANTHROPIC_API_KEY", "anthropic", "claude-haiku-4-5"),
+        ("OPENAI_API_KEY", "openai", "gpt-5-mini"),
+        ("GEMINI_API_KEY", "gemini", "gemini-3.5-flash"),
+    ];
+    for &(env, provider, model) in CANDIDATES {
+        if std::env::var(env).map(|k| !k.is_empty()).unwrap_or(false) {
+            return Some((
+                compact_str::CompactString::new(provider),
+                compact_str::CompactString::new(model),
+            ));
+        }
+    }
+    None
+}
+
 /// Pick a sensible default model when targeting `provider`. Priority:
 /// a custom gateway's configured `model`, then a quick model targeting this
 /// provider (carrying its pricing), then a built-in fallback. Returns

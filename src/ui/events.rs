@@ -35,10 +35,11 @@ pub fn render_session(
 ) -> anyhow::Result<()> {
     renderer.clear_content()?;
     let welcome = format!(
-        "zerostack {}  {}  {}",
+        "zerostack {} ({})  {}  {}",
+        env!("CARGO_PKG_VERSION"),
+        env!("GIT_COMMIT_HASH"),
         cli.resolve_provider(cfg),
         cli.resolve_model(cfg),
-        env!("CARGO_PKG_VERSION")
     );
     renderer.write_line(&welcome, Color::Cyan)?;
     renderer.write_line("", Color::White)?;
@@ -66,10 +67,12 @@ pub fn render_session(
         )?;
         renderer.write_line("", Color::White)?;
     }
+    let user_color = renderer.user_color();
+    let text_color = renderer.text_color();
     for msg in &session.messages {
         let (prefix, _c) = match msg.role {
-            MessageRole::User => (">", Color::Green),
-            MessageRole::Assistant => ("<", Color::White),
+            MessageRole::User => (">", user_color),
+            MessageRole::Assistant => ("<", text_color),
             MessageRole::System => ("#", Color::DarkGrey),
         };
         if msg.role == MessageRole::Assistant {

@@ -1,3 +1,4 @@
+use crossterm::cursor::SetCursorStyle;
 use crossterm::style::Color;
 use unicode_width::UnicodeWidthStr;
 
@@ -71,6 +72,20 @@ pub(crate) fn parse_color(s: &str) -> Option<Color> {
             }
             None
         }
+    }
+}
+
+/// Parses a cursor style name into a crossterm SetCursorStyle.
+pub(crate) fn parse_cursor_style(s: &str) -> Option<SetCursorStyle> {
+    match s.to_lowercase().replace('-', "_").as_str() {
+        "default" => Some(SetCursorStyle::DefaultUserShape),
+        "blinking_block" | "block" => Some(SetCursorStyle::BlinkingBlock),
+        "steady_block" => Some(SetCursorStyle::SteadyBlock),
+        "blinking_bar" | "bar" => Some(SetCursorStyle::BlinkingBar),
+        "steady_bar" => Some(SetCursorStyle::SteadyBar),
+        "blinking_underline" | "underline" => Some(SetCursorStyle::BlinkingUnderScore),
+        "steady_underline" => Some(SetCursorStyle::SteadyUnderScore),
+        _ => None,
     }
 }
 

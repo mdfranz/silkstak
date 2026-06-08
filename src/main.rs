@@ -131,6 +131,21 @@ async fn main() -> anyhow::Result<()> {
         model = qm.model.clone();
     }
 
+    // --provider auto: pick the first provider with a known API key set and
+    // persist the result so subsequent runs use it without the flag.
+    if provider.as_str() == "auto" {
+        match provider::resolve_auto() {
+            Some((p, m)) => {
+                let _ = config::save_provider_and_model(&p, &m);
+                provider = p;
+                model = m;
+            }
+            None => anyhow::bail!(
+                "--provider auto: no API key found; set ANTHROPIC_API_KEY, OPENAI_API_KEY, or GEMINI_API_KEY"
+            ),
+        }
+    }
+
     let mut session = session::Session::new(&provider, &model, cfg.resolve_context_window());
 
     // Resolve input/output token costs from quick models or defaults
@@ -183,6 +198,18 @@ async fn main() -> anyhow::Result<()> {
                 );
             }
             anyhow::bail!("be more specific with the session ID prefix");
+        }
+    }
+
+    // When resuming a saved session, restore its provider/model unless the user
+    // explicitly overrode them on the command line.
+    if (cli.continue_session || cli.session.is_some())
+        && cli.provider.is_none()
+        && cli.quick_model.is_none()
+    {
+        provider = session.provider.clone();
+        if cli.model.is_none() {
+            model = session.model.clone();
         }
     }
 
@@ -329,7 +356,7 @@ async fn main() -> anyhow::Result<()> {
 
     // ARCHITECTURE.md prompt: defer to here so all heavy setup completes first.
     #[cfg(feature = "archmd")]
-    let arch_created = if !cli.resolve_no_context_files(&cfg) {
+    let arch_created = if !cli.resolve_no_context_files(&cfg) && cfg.arch_prompt.unwrap_or(true) {
         let cwd = std::env::current_dir().ok();
         if let Some(ref cwd) = cwd {
             crate::extras::archmd::ask_and_create(cwd).unwrap_or_else(|e| {
