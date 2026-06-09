@@ -475,3 +475,34 @@ Write well-tested code. Follow project conventions.
 The mode change is applied when the prompt is activated and persists
 until changed again by `/mode`, another prompt directive, or a restart.
 The status bar shows `| mode:<name>` when the mode is not `standard`.
+
+## Environment Variables
+
+### Logging
+
+Logging is configured via environment variables:
+
+- **`RUST_LOG`**: Controls the logging level using the standard Rust logging
+  filter syntax. Examples: `debug`, `info`, `warn,rig=off`, `zerostack=debug`.
+  Default: `warn,rig=off` (show warnings except from the rig library).
+
+- **`RUST_LOG_FILE`**: Enables logging to a file instead of stderr. Set to a
+  file path to log to that file, or set to `1`, `true`, or empty to log to
+  `zerostack.log` in the current directory. If the file cannot be opened (e.g.,
+  permission denied), logging gracefully falls back to stderr.
+
+Examples:
+
+```bash
+# Log to stderr with debug level for zerostack
+RUST_LOG=zerostack=debug zerostack
+
+# Log to zerostack.log in append mode
+RUST_LOG_FILE=1 zerostack
+
+# Log to a custom file
+RUST_LOG_FILE=/var/log/zerostack.log zerostack
+
+# Log with RUST_LOG filter to a file
+RUST_LOG=info RUST_LOG_FILE=debug.log zerostack
+```

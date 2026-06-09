@@ -91,7 +91,10 @@ fn init_logging() {
                     tracing::info!("Logging initialized (file: {})", path);
                 }
                 Err(err) => {
-                    eprintln!("Warning: failed to open log file '{}': {}. Falling back to stderr.", path, err);
+                    eprintln!(
+                        "Warning: failed to open log file '{}': {}. Falling back to stderr.",
+                        path, err
+                    );
                     tracing_subscriber::fmt()
                         .with_writer(std::io::stderr)
                         .with_env_filter(filter)

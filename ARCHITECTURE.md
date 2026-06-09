@@ -170,7 +170,7 @@ Session is serialized to JSON files in `$XDG_DATA_HOME/zerostack/sessions/`. Cha
 | `ignore 0.4` | `.gitignore`-aware file traversal (`find_files` tool) |
 | `regex 1` | Permission pattern matching |
 | `reqwest 0.13` | HTTP client (provider API calls via rig) |
-| `tracing + tracing-subscriber` | Structured logging (`RUST_LOG` env var) |
+| `tracing + tracing-subscriber` | Structured logging (`RUST_LOG`, `RUST_LOG_FILE` env vars) |
 | `mimalloc` | Global allocator (size + speed) |
 | `compact_str`, `smallvec` | Heap-efficient small-string/small-vector types |
 
