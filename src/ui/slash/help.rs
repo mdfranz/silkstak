@@ -31,10 +31,21 @@ pub fn handle(_parts: &[&str], ctx: &mut SlashCtx<'_>) {
         ctx.renderer,
         "  /provider [name]       show or switch provider",
     );
-    write_result(ctx.renderer, "  /models                list quick models");
     write_result(
         ctx.renderer,
-        "  /models <name>         switch to a quick model",
+        "  /models                current model + quick models (this provider)",
+    );
+    write_result(
+        ctx.renderer,
+        "  /models all            quick models across all providers",
+    );
+    write_result(
+        ctx.renderer,
+        "  /models list           full available model list from provider",
+    );
+    write_result(
+        ctx.renderer,
+        "  /models <name>         switch to a quick model (or raw model id)",
     );
     write_result(ctx.renderer, "  /models-add <n> <p> <m> save a quick model");
     write_result(

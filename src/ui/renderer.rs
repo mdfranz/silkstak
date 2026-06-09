@@ -18,6 +18,24 @@ pub struct LineEntry {
     pub color: Color,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct SelectionPoint {
+    pub buf_idx: usize,
+    pub chunk_idx: usize,
+    pub byte: usize,
+}
+
+fn col_to_byte(text: &str, col: usize) -> usize {
+    let mut w = 0;
+    for (pos, c) in text.char_indices() {
+        if w >= col {
+            return pos;
+        }
+        w += char_display_width(c);
+    }
+    text.len()
+}
+
 pub struct Renderer {
     lines: u16,
     col: u16,
@@ -36,9 +54,13 @@ pub struct Renderer {
     status_color: Color,
     cursor_style: Option<SetCursorStyle>,
     pub selection_active: bool,
-    pub selection_start: Option<usize>,
-    pub selection_end: Option<usize>,
+    pub selection_start: Option<SelectionPoint>,
+    pub selection_end: Option<SelectionPoint>,
+    pub selection_anchor: Option<SelectionPoint>,
     prev_input_height: usize,
+    pub show_cursor: bool,
+    pub header: Option<LineEntry>,
+    pub top_bar: Option<LineEntry>,
 }
 
 impl Renderer {
@@ -59,11 +81,15 @@ impl Renderer {
             text_color: Color::White,
             user_color: Color::Green,
             status_color: Color::Grey,
-            cursor_style: None,
+            cursor_style: Some(SetCursorStyle::SteadyBar),
             selection_active: false,
             selection_start: None,
             selection_end: None,
+            selection_anchor: None,
             prev_input_height: 0,
+            show_cursor: true,
+            header: None,
+            top_bar: None,
         })
     }
 
@@ -139,67 +165,163 @@ impl Renderer {
 
     pub fn visible_lines(&self) -> usize {
         let (_, rows) = self.terminal_size();
-        rows.saturating_sub(2) as usize
+        let mut base = rows.saturating_sub(2) as usize;
+        if self.header.is_some() || self.top_bar.is_some() {
+            base = base.saturating_sub(1);
+        }
+        base
     }
 
-    pub fn buffer_line_at_row(&self, row: u16) -> Option<usize> {
-        let (cols, rows) = self.terminal_size();
-        let max_width = cols.saturating_sub(1) as usize;
-        let visible = rows.saturating_sub(2) as usize;
-        let total = self.buffer.len();
-        if total == 0 {
-            return None;
-        }
+    fn viewport_start(&self, visible: usize, total: usize) -> usize {
         let start = if self.scroll_offset == 0 {
             total.saturating_sub(visible)
         } else {
             total.saturating_sub(self.scroll_offset + visible)
         };
-        let start = start.min(total.saturating_sub(visible));
+        start.min(total.saturating_sub(visible))
+    }
 
-        let mut visual_row: u16 = 0;
-        let mut buf_idx = start;
-
-        while buf_idx < total {
-            let entry = &self.buffer[buf_idx];
-            let text = &entry.text;
-
-            let wrapped_rows = if display_width(text) > max_width {
-                word_wrap(text, max_width).len() as u16
-            } else {
-                1
-            };
-
-            if visual_row + wrapped_rows > row {
-                return Some(buf_idx);
-            }
-
-            visual_row += wrapped_rows;
-            buf_idx += 1;
+    pub fn buffer_pos_at_row_col(&self, row: u16, col: u16) -> Option<SelectionPoint> {
+        let (cols, _) = self.terminal_size();
+        let max_width = cols.saturating_sub(1) as usize;
+        let visible = self.visible_lines();
+        let total = self.buffer.len();
+        if total == 0 {
+            return None;
         }
 
+        let start_row = if self.header.is_some() || self.top_bar.is_some() {
+            1
+        } else {
+            0
+        };
+        if row < start_row {
+            return None;
+        }
+        let adjusted_row = row - start_row;
+
+        let start = self.viewport_start(visible, total);
+        let mut visual_row: u16 = 0;
+        let mut buf_idx = start;
+        while buf_idx < total {
+            let text = &self.buffer[buf_idx].text;
+            let chunks: SmallVec<[CompactString; 4]> = if display_width(text) > max_width {
+                word_wrap(text, max_width)
+            } else {
+                smallvec![text.clone()]
+            };
+            for (chunk_idx, chunk) in chunks.iter().enumerate() {
+                if visual_row == adjusted_row {
+                    let byte = col_to_byte(chunk, col as usize);
+                    return Some(SelectionPoint {
+                        buf_idx,
+                        chunk_idx,
+                        byte,
+                    });
+                }
+                visual_row += 1;
+                if visual_row as usize >= visible {
+                    return None;
+                }
+            }
+            buf_idx += 1;
+        }
         None
+    }
+
+    fn normalized_selection(&self) -> Option<(&SelectionPoint, &SelectionPoint)> {
+        let s = self.selection_start.as_ref()?;
+        let e = self.selection_end.as_ref()?;
+        if (s.buf_idx, s.chunk_idx, s.byte) <= (e.buf_idx, e.chunk_idx, e.byte) {
+            Some((s, e))
+        } else {
+            Some((e, s))
+        }
+    }
+
+    fn chunk_selection_range(
+        &self,
+        buf_idx: usize,
+        chunk_idx: usize,
+        chunk_len: usize,
+    ) -> Option<(usize, usize)> {
+        if !self.selection_active {
+            return None;
+        }
+        let (start, end) = self.normalized_selection()?;
+        let this = (buf_idx, chunk_idx);
+        let sel_start = (start.buf_idx, start.chunk_idx);
+        let sel_end = (end.buf_idx, end.chunk_idx);
+        if this < sel_start || this > sel_end {
+            return None;
+        }
+        let byte_start = if this == sel_start {
+            start.byte.min(chunk_len)
+        } else {
+            0
+        };
+        let byte_end = if this == sel_end {
+            end.byte.min(chunk_len)
+        } else {
+            chunk_len
+        };
+        if byte_start >= byte_end {
+            return None;
+        }
+        Some((byte_start, byte_end))
     }
 
     pub fn clear_selection(&mut self) {
         self.selection_active = false;
         self.selection_start = None;
         self.selection_end = None;
+        self.selection_anchor = None;
     }
 
     pub fn selected_text(&self) -> Option<String> {
-        let (start, end) = match (self.selection_start, self.selection_end) {
-            (Some(s), Some(e)) if s <= e => (s, e),
-            (Some(s), Some(e)) => (e, s),
-            _ => return None,
-        };
+        let (start, end) = self.normalized_selection()?;
+        let (cols, _) = self.terminal_size();
+        let max_width = cols.saturating_sub(1) as usize;
         let mut result = String::new();
-        for i in start..=end {
-            if let Some(entry) = self.buffer.get(i) {
-                if !result.is_empty() {
+        for buf_idx in start.buf_idx..=end.buf_idx {
+            let Some(entry) = self.buffer.get(buf_idx) else {
+                continue;
+            };
+            let text = &entry.text;
+            let chunks: SmallVec<[CompactString; 4]> = if display_width(text) > max_width {
+                word_wrap(text, max_width)
+            } else {
+                smallvec![text.clone()]
+            };
+            let chunk_lo = if buf_idx == start.buf_idx {
+                start.chunk_idx
+            } else {
+                0
+            };
+            let chunk_hi = if buf_idx == end.buf_idx {
+                end.chunk_idx
+            } else {
+                chunks.len().saturating_sub(1)
+            };
+            for (chunk_idx, chunk) in chunks.iter().enumerate() {
+                if chunk_idx < chunk_lo || chunk_idx > chunk_hi {
+                    continue;
+                }
+                let byte_start = if buf_idx == start.buf_idx && chunk_idx == start.chunk_idx {
+                    start.byte.min(chunk.len())
+                } else {
+                    0
+                };
+                let byte_end = if buf_idx == end.buf_idx && chunk_idx == end.chunk_idx {
+                    end.byte.min(chunk.len())
+                } else {
+                    chunk.len()
+                };
+                let slice = &chunk[byte_start..byte_end];
+                if !result.is_empty() && !slice.is_empty() {
                     result.push('\n');
                 }
-                result.push_str(&entry.text);
+                result.push_str(slice);
             }
         }
         if result.is_empty() {
@@ -280,24 +402,47 @@ impl Renderer {
     }
 
     pub fn render_viewport(&mut self) -> io::Result<()> {
-        let (cols, rows) = self.terminal_size();
+        let (cols, _rows) = self.terminal_size();
         let max_width = cols.saturating_sub(1) as usize;
-        let visible = rows.saturating_sub(2) as usize;
+        let visible = self.visible_lines();
         let total = self.buffer.len();
         let mut stdout = io::stdout();
         write!(stdout, "{}", Hide)?;
 
-        let start = if self.scroll_offset == 0 {
-            total.saturating_sub(visible)
-        } else {
-            total.saturating_sub(self.scroll_offset + visible)
-        };
-        let start = start.min(total.saturating_sub(visible));
-
         let mut visual_row: u16 = 0;
-        let mut buf_idx = start;
 
-        while (visual_row as usize) < visible && buf_idx < total {
+        if let Some(ref header) = self.header {
+            stdout.execute(MoveTo(0, 0))?;
+            let color = self.color(Color::Blue);
+            write!(stdout, "{}", SetBackgroundColor(color))?;
+            write!(stdout, "{}", SetForegroundColor(self.color(header.color)))?;
+            let truncated: String = header.text.chars().take(cols as usize).collect();
+            write!(stdout, "{}", truncated)?;
+            write!(stdout, "{}", Clear(ClearType::UntilNewLine))?;
+            write!(stdout, "{}", ResetColor)?;
+            visual_row = 1;
+        } else if let Some(ref top) = self.top_bar {
+            stdout.execute(MoveTo(0, 0))?;
+            let bg = self.color(Color::DarkGrey);
+            write!(stdout, "{}", SetBackgroundColor(bg))?;
+            write!(stdout, "{}", SetForegroundColor(self.color(top.color)))?;
+            let truncated: String = top.text.chars().take(cols as usize).collect();
+            write!(stdout, "{}", truncated)?;
+            write!(stdout, "{}", Clear(ClearType::UntilNewLine))?;
+            write!(stdout, "{}", ResetColor)?;
+            visual_row = 1;
+        }
+
+        let start = self.viewport_start(visible, total);
+        let mut buf_idx = start;
+        let limit = (visible
+            + if self.header.is_some() || self.top_bar.is_some() {
+                1
+            } else {
+                0
+            }) as u16;
+
+        while (visual_row as u16) < limit && buf_idx < total {
             let entry = &self.buffer[buf_idx];
             let text = &entry.text;
 
@@ -307,35 +452,38 @@ impl Renderer {
                 smallvec![text.clone()]
             };
 
-            for chunk in &wrapped {
-                if (visual_row as usize) >= visible {
+            for (chunk_idx, chunk) in wrapped.iter().enumerate() {
+                if visual_row >= limit {
                     break;
                 }
 
                 stdout.execute(MoveTo(0, visual_row))?;
 
-                let is_selected = self.selection_active
-                    && self.selection_start.is_some()
-                    && self.selection_end.is_some()
-                    && {
-                        let s = self.selection_start.unwrap();
-                        let e = self.selection_end.unwrap();
-                        let lo = s.min(e);
-                        let hi = s.max(e);
-                        buf_idx >= lo && buf_idx <= hi
-                    };
-
                 if let Some(bg) = self.chat_bg {
                     write!(stdout, "{}", SetBackgroundColor(self.color(bg)))?;
                 }
-                if is_selected {
-                    write!(stdout, "{}", SetAttribute(Attribute::Reverse))?;
-                }
                 write!(stdout, "{}", SetForegroundColor(self.color(entry.color)))?;
-                write!(stdout, "{}", chunk)?;
-                if is_selected {
-                    write!(stdout, "{}", SetAttribute(Attribute::NoReverse))?;
+
+                match self.chunk_selection_range(buf_idx, chunk_idx, chunk.len()) {
+                    None => {
+                        write!(stdout, "{}", chunk)?;
+                    }
+                    Some((byte_start, byte_end)) => {
+                        let before = &chunk[..byte_start];
+                        let selected = &chunk[byte_start..byte_end];
+                        let after = &chunk[byte_end..];
+                        if !before.is_empty() {
+                            write!(stdout, "{}", before)?;
+                        }
+                        write!(stdout, "{}", SetAttribute(Attribute::Reverse))?;
+                        write!(stdout, "{}", selected)?;
+                        write!(stdout, "{}", SetAttribute(Attribute::NoReverse))?;
+                        if !after.is_empty() {
+                            write!(stdout, "{}", after)?;
+                        }
+                    }
                 }
+
                 write!(stdout, "{}", Clear(ClearType::UntilNewLine))?;
                 write!(stdout, "{}", ResetColor)?;
 
@@ -345,7 +493,7 @@ impl Renderer {
             buf_idx += 1;
         }
 
-        while (visual_row as usize) < visible {
+        while visual_row < limit {
             stdout.execute(MoveTo(0, visual_row))?;
             if let Some(bg) = self.chat_bg {
                 write!(stdout, "{}", SetBackgroundColor(self.color(bg)))?;
@@ -363,7 +511,8 @@ impl Renderer {
             };
             let indicator = format!(" SCROLL {}% ", pct);
             let x = cols.saturating_sub(indicator.len() as u16);
-            stdout.execute(MoveTo(x, 0))?;
+            let indicator_row = if self.header.is_some() { 1 } else { 0 };
+            stdout.execute(MoveTo(x, indicator_row))?;
             if let Some(bg) = self.chat_bg {
                 write!(stdout, "{}", SetBackgroundColor(self.color(bg)))?;
             }
@@ -716,14 +865,11 @@ impl Renderer {
 
         // Status line
         stdout.execute(MoveTo(0, status_row))?;
-        if let Some(bg) = self.status_bg {
-            write!(stdout, "{}", SetBackgroundColor(self.color(bg)))?;
-        }
+        let bg_color = self.status_bg.unwrap_or(Color::DarkGrey);
+        write!(stdout, "{}", SetBackgroundColor(self.color(bg_color)))?;
         write!(stdout, "{}", Clear(ClearType::CurrentLine))?;
         stdout.execute(MoveTo(0, status_row))?;
-        if let Some(bg) = self.status_bg {
-            write!(stdout, "{}", SetBackgroundColor(self.color(bg)))?;
-        }
+        write!(stdout, "{}", SetBackgroundColor(self.color(bg_color)))?;
         write!(
             stdout,
             "{}",
@@ -740,14 +886,18 @@ impl Renderer {
         write!(stdout, "{}", ResetColor)?;
 
         // Cursor
-        let cursor_render_idx = cursor_line.saturating_sub(first_visible);
-        let cursor_row =
-            (rows.saturating_sub(2) - visible_line_count as u16 + 1) + cursor_render_idx as u16;
-        let cursor_x = (prompt_width + cursor_display_col.saturating_sub(h_scroll)) as u16;
-        stdout.execute(MoveTo(cursor_x, cursor_row))?;
-        write!(stdout, "{}", Show)?;
-        if let Some(style) = self.cursor_style {
-            write!(stdout, "{}", style)?;
+        if self.show_cursor && !is_running {
+            let cursor_render_idx = cursor_line.saturating_sub(first_visible);
+            let cursor_row =
+                (rows.saturating_sub(2) - visible_line_count as u16 + 1) + cursor_render_idx as u16;
+            let cursor_x = (prompt_width + cursor_display_col.saturating_sub(h_scroll)) as u16;
+            stdout.execute(MoveTo(cursor_x, cursor_row))?;
+            write!(stdout, "{}", Show)?;
+            if let Some(style) = self.cursor_style {
+                write!(stdout, "{}", style)?;
+            }
+        } else {
+            write!(stdout, "{}", Hide)?;
         }
         stdout.flush()?;
         Ok(())
@@ -755,34 +905,54 @@ impl Renderer {
 }
 
 pub fn copy_to_clipboard(text: &str) {
-    let cmds: &[(&str, &[&str])] = &[
-        ("wl-copy", &[]),
-        ("xclip", &["-selection", "clipboard"]),
-        ("pbcopy", &[]),
-        ("clip.exe", &[]),
-    ];
+    tracing::debug!(bytes = text.len(), text = text, "copy_to_clipboard");
+    let on_wayland = std::env::var("WAYLAND_DISPLAY").is_ok();
+    // xclip writes to the X11 clipboard which Wayland-native terminals don't read,
+    // and child.wait() would block until another app claims the clipboard.
+    // Skip it on Wayland and let OSC 52 handle it instead.
+    let cmds: &[(&str, &[&str])] = if on_wayland {
+        &[("wl-copy", &[]), ("pbcopy", &[]), ("clip.exe", &[])]
+    } else {
+        &[
+            ("wl-copy", &[]),
+            ("xclip", &["-selection", "clipboard"]),
+            ("pbcopy", &[]),
+            ("clip.exe", &[]),
+        ]
+    };
     for &(cmd, args) in cmds {
-        if let Ok(mut child) = std::process::Command::new(cmd)
+        match std::process::Command::new(cmd)
             .args(args)
             .stdin(std::process::Stdio::piped())
             .spawn()
         {
-            if let Some(mut stdin) = child.stdin.take() {
-                let _ = stdin.write_all(text.as_bytes());
-                let _ = stdin.flush();
+            Ok(mut child) => {
+                tracing::debug!("copy_to_clipboard: using {}", cmd);
+                if let Some(mut stdin) = child.stdin.take() {
+                    let _ = stdin.write_all(text.as_bytes());
+                    let _ = stdin.flush();
+                }
+                // Don't wait — tools like xclip stay alive to serve clipboard requests.
+                drop(child);
+                tracing::debug!("copy_to_clipboard: {} done", cmd);
+                return;
             }
-            let _ = child.wait();
-            return;
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => {
+                tracing::debug!("copy_to_clipboard: {} failed: {}", cmd, e);
+            }
         }
     }
 
     // OSC 52 escape sequence — clipboard access via terminal emulator.
     // Supported by Kitty, Alacritty, WezTerm, foot, iTerm2, Windows Terminal,
     // and most other modern terminals. No external tools needed.
+    tracing::debug!("copy_to_clipboard: falling back to OSC 52");
     let encoded = base64_encode(text.as_bytes());
     let mut stdout = std::io::stdout().lock();
     let _ = write!(stdout, "\x1b]52;c;{encoded}\x07");
     let _ = stdout.flush();
+    tracing::debug!("copy_to_clipboard: OSC 52 written");
 }
 
 /// Minimal base64 encoder — avoids pulling in a crate just for clipboard support.

@@ -1,4 +1,4 @@
-# Architecture — zerostack v1.4.0-rc2
+# Architecture — zerostack v1.5.0-rc1
 
 Minimal coding agent in Rust, optimized for memory footprint and performance.
 Single crate, no workspace. All source under `src/`.
@@ -7,18 +7,20 @@ Single crate, no workspace. All source under `src/`.
 
 | Path | Responsibility |
 |---|---|
-| `src/main.rs` | Entry point, CLI dispatch, mode routing |
+| `src/main.rs` | Entry point, CLI dispatch, mode routing (`ui::run_interactive`, `run_headless_loop`, `run_print`) |
 | `src/cli.rs` | `clap::Parser` CLI argument definition |
 | `src/provider.rs` | LLM provider abstraction (type-erased: `AnyClient`, `AnyModel`, `AnyAgent` enums) |
 | `src/auth.rs` | API key resolution (`AuthResolver`, `ProviderKind` enum) |
 | `src/event.rs` | `AgentEvent` (streaming LLM output) and `UserEvent` (TUI input) enums |
-| `src/agent/` | Agent lifecycle: `builder.rs` (rig Agent construction + tool injection), `runner.rs` (spawn, stream), `prompt.rs` (system prompts), `tools/` (11 tool impls) |
+| `src/agent/` | Agent lifecycle: `builder.rs` (rig Agent construction + tool injection), `runner.rs` (spawn, stream), `prompt.rs` (system prompts), `tools/` (12 tool impls) |
 | `src/session/` | Session state: `mod.rs` (messages, compactions, costs), `storage.rs` (JSON file I/O), `chat_history.rs` |
-| `src/permission/` | Security: `checker.rs` (glob+regex rules, doom-loop detection), `ask.rs` (user prompt UI), `pattern.rs` |
-| `src/ui/` | Custom TUI on crossterm (no ratatui): `mod.rs` (event loop), `terminal.rs` (raw mode guard), `renderer.rs` (line buffer + viewport), `input/` (text editor + pickers), `status.rs`, `markdown.rs`, `event_handler.rs`, `cmd_picker.rs` |
+| `src/permission/` | Security: `checker.rs` (glob+regex rules, doom-loop detection, `SecurityMode` dispatch), `ask.rs` (user prompt UI), `pattern.rs` |
+| `src/ui/` | Custom TUI on crossterm (no ratatui): `mod.rs` (event loop), `terminal.rs` (raw mode guard), `renderer.rs` (line buffer + viewport), `input/` (text editor + pickers), `status.rs`, `markdown.rs`, `event_handler.rs` |
 | `src/context/` | Context gathering: embedded prompt themes (`prompts.rs`, `themes.rs`), AGENTS.md/ARCHITECTURE.md loading |
 | `src/config/` | Configuration: `load.rs` (TOML/JSON from disk+env), `types.rs` (QuickModel, CustomProvider, Colors, EditSystem) |
-| `src/extras/` | Feature-gated extensions: `loop/` (headless), `mcp/` (MCP client), `acp/` (ACP server), `memory/` (persistent memory), `subagents/` (parallel task delegation), `git_worktree/`, `archmd/` |
+| `src/extras/` | Feature-gated extensions: `loop/` (headless), `mcp/` (MCP client), `acp/` (ACP server), `memory/` (persistent memory), `subagents/` (parallel task delegation), `git_worktree/`, `archmd/`, `status_signals.rs` |
+| `src/models_catalog.rs` | Baked-in model entries from `data/models.json` to avoid startup network calls |
+| `src/docs.rs` | Embedded documentation management and version-syncing to data directory |
 | `src/sandbox.rs` | `bwrap`/`zerobox` command wrapping |
 | `src/fs.rs` | Filesystem utilities |
 | `src/pricing.rs` | Token pricing constants |
@@ -32,11 +34,12 @@ Single crate, no workspace. All source under `src/`.
 - **`AgentEvent`** (`src/event.rs:4`) — `Token`, `Reasoning`, `ToolCall`, `ToolResult`, `SubagentToolCall`, `Error`, `Done`.
 - **`UserEvent`** (`src/event.rs:27`) — `Key`, `ScrollUp/Down`, `Resize`, `Paste`, `MouseDown/Drag/Up`.
 - **`Session`** (`src/session/mod.rs:39`) — serializable state: messages, compactions, costs, permission allowlist, model/provider info.
-- **`PermissionChecker`** (`src/permission/checker.rs:29`) — dual-layer (glob + regex) rules, doom-loop detection, `SecurityMode` dispatch.
+- **`PermissionChecker`** (`src/permission/checker.rs:29`) — dual-layer (glob + regex) rules, doom-loop detection, `SecurityMode` dispatch (`Standard`, `Restrictive`, `ReadOnly`, `PlanWrite`, `Guarded`, `Yolo`).
 - **`TerminalGuard`** (`src/ui/terminal.rs:10`) — RAII for raw mode, alt screen, mouse capture.
 - **`Renderer`** (`src/ui/renderer.rs:21`) — line-buffered viewport, markdown rendering, scroll/selection.
 - **`InputEditor`** (`src/ui/input/mod.rs:22`) — text buffer, cursor, history, kill-ring, picker integration.
 - **`ContextFiles`** (`src/context/mod.rs:56`) — loaded agents, prompts, themes, architecture docs.
+- **`CATALOG`** (`src/models_catalog.rs`) — `LazyLock` map of baked model entries.
 
 ## Control Flow
 
@@ -51,6 +54,13 @@ graph TD
     D -->|--loop| H[run_headless_loop]
     D -->|Default| I[ui::run_interactive]
 ```
+
+### Startup Procedures
+
+1. **`docs::ensure_global()`** — Checks for version change, syncs embedded docs, and potentially prompts to regenerate prompts/themes.
+2. **`extras::archmd::ask_and_create()`** — Prompts to create `ARCHITECTURE.md` if missing in a new project.
+3. **Capability Injection** — Persistent memory and subagent tools are injected into the system prompt based on active features.
+4. **Mode Resolution** — `resolve_mode` determines initial `SecurityMode` from CLI flags, config, or prompt-level `%%mode=` directives.
 
 ### Interactive TUI Event Loop (`src/ui/mod.rs`)
 
@@ -151,16 +161,19 @@ Session is serialized to JSON files in `$XDG_DATA_HOME/zerostack/sessions/`. Cha
 
 1. **Custom TUI over crossterm (no ratatui)** — keeps binary size minimal; project has its own line buffer, markdown renderer, scroll/selection. No widget tree overhead.
 2. **Type-erased enums, not trait objects** — `AnyAgent` enum wraps each provider variant. Avoids `dyn CompletionModel` lifetime issues; matching on enum is faster than vtable dispatch. (`src/provider.rs:83-259`)
-3. **Permission: dual-layer (glob + regex) rules** — glob for fast path, regex for complex patterns. Doom-loop detection tracks repeated identical tool calls. (`src/permission/checker.rs:29`)
+3. **Permission: dual-layer (glob + regex) rules** — glob for fast path, regex for complex patterns. Doom-loop detection tracks repeated identical tool calls and issues "coaching" prompts. (`src/permission/checker.rs:29`)
 4. **Session compaction** — when token count approaches context window, old messages are summarized and dropped, preserving a summary prefix. (`src/session/mod.rs:24`)
 5. **Feature-gated extras** — `loop`, `mcp`, `acp`, `memory`, `subagents`, `git-worktree`, `archmd` are all compile-time features. Extras don't bloat the core binary.
 6. **Single-threaded tokio by default** — `#[tokio::main(flavor = "current_thread")]` unless `multithread` feature enabled. Keeps resource usage low for a CLI tool.
+7. **`mimalloc` as global allocator** — Optimized for performance and fragmentation in long-running TUI sessions.
+8. **Baked Model Catalog** — `LazyLock` seeded from `data/models.json` eliminates slow network calls during startup/picker initialization.
+9. **Prompt-driven Security** — `%%mode=` directives in prompt files allow prompts to define their own required security level (e.g., `%%mode=restrictive`).
 
 ## Dependencies
 
 | Crate | Use |
 |---|---|
-| `rig 0.37` | Agent framework: prompt hooks, tool system, streaming, provider clients (OpenAI, Anthropic, Gemini, Ollama, OpenRouter) |
+| `rig 0.38` | Agent framework: prompt hooks, tool system, streaming, provider clients (OpenAI, Anthropic, Gemini, Ollama, OpenRouter) |
 | `clap 4` | Derive-based CLI argument parsing (`src/cli.rs:9`) |
 | `crossterm 0.29` | Terminal raw mode, color, cursor, mouse, paste events — TUI foundation |
 | `tokio 1` | Async runtime (current_thread default), channels (`mpsc`), process, fs |
@@ -173,6 +186,8 @@ Session is serialized to JSON files in `$XDG_DATA_HOME/zerostack/sessions/`. Cha
 | `tracing + tracing-subscriber` | Structured logging (`RUST_LOG`, `RUST_LOG_FILE` env vars) |
 | `mimalloc` | Global allocator (size + speed) |
 | `compact_str`, `smallvec` | Heap-efficient small-string/small-vector types |
+| `unicode-width` | Accurate text width calculation for TUI alignment |
+| `include_dir` | Embedding documentation and assets into the binary |
 
 Optional (`mcp` feature): `rmcp 1.7` (MCP client with child-process + HTTP transport). Optional (`acp` feature): `agent-client-protocol 0.12`.
 

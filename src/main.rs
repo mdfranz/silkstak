@@ -10,7 +10,6 @@ mod extras;
 mod fs;
 mod models_catalog;
 mod permission;
-mod pricing;
 mod provider;
 mod sandbox;
 mod session;
@@ -208,20 +207,6 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let mut session = session::Session::new(&provider, &model, cfg.resolve_context_window());
-
-    // Resolve input/output token costs from quick models or defaults
-    let qm_map = config::quick_models_map(&cfg);
-    if let Some(qm) = cli.resolve_quick_model(&cfg) {
-        session.input_token_cost = qm.input_token_cost;
-        session.output_token_cost = qm.output_token_cost;
-    } else if let Some(qm) = qm_map
-        .iter()
-        .find(|(_, v)| v.model.as_str() == model && v.provider.as_str() == provider)
-        .map(|(_, v)| v)
-    {
-        session.input_token_cost = qm.input_token_cost;
-        session.output_token_cost = qm.output_token_cost;
-    }
 
     if cli.continue_session
         && cli.session.is_none()
@@ -780,16 +765,8 @@ fn print_providers(cli: &cli::Cli, cfg: &config::Config) {
     println!("Quick models ({}):", names.len());
     for name in &names {
         let q = &qm[*name];
-        let cost = if q.input_token_cost > 0.0 || q.output_token_cost > 0.0 {
-            format!(
-                "  ${:.4}/$M in  ${:.4}/$M out",
-                q.input_token_cost, q.output_token_cost
-            )
-        } else {
-            String::new()
-        };
         println!(
-            "  {name:<alias_w$}  {prov:<prov_w$}  {model}{cost}",
+            "  {name:<alias_w$}  {prov:<prov_w$}  {model}",
             prov = q.provider,
             model = q.model,
         );

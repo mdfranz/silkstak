@@ -15,7 +15,6 @@ fn fmt_tokens(n: u64) -> String {
 }
 
 impl StatusLine {
-    #[allow(clippy::too_many_arguments)]
     pub fn render(
         session: &Session,
         is_running: bool,
@@ -23,7 +22,6 @@ impl StatusLine {
         loop_label: Option<&str>,
         prompt_name: Option<&str>,
         perm_mode: Option<&str>,
-        btw_cost: f64,
         btw_in: u64,
         btw_out: u64,
     ) -> String {
@@ -37,26 +35,8 @@ impl StatusLine {
         let used = session.total_estimated_tokens;
         let pct = if ctx > 0 { (used * 100) / ctx } else { 0 };
 
-        let cost_str = if session.total_cost > 0.0 {
-            format!(" ${:.4}", session.total_cost)
-        } else {
-            String::new()
-        };
-
-        // Side-question (`/btw`) usage is tracked and shown separately so it
-        // never pollutes the main session totals. Shown once `/btw` is used;
-        // cost is added only when the model has per-token pricing configured.
         let btw_badge = if btw_in > 0 || btw_out > 0 {
-            if btw_cost > 0.0 {
-                format!(
-                    " btw:${:.4} ({}/{})",
-                    btw_cost,
-                    fmt_tokens(btw_in),
-                    fmt_tokens(btw_out)
-                )
-            } else {
-                format!(" btw:{}/{}", fmt_tokens(btw_in), fmt_tokens(btw_out))
-            }
+            format!(" btw:{}/{}", fmt_tokens(btw_in), fmt_tokens(btw_out))
         } else {
             String::new()
         };
@@ -93,12 +73,9 @@ impl StatusLine {
         };
 
         format!(
-            "{}{}{} | {}{} | {}/{} ({}%) | {}msgs{}{} | {}{}{}",
+            "{}{} | {}/{} ({}%) | {}msgs{}{} | {}{}{}{}",
             dir,
-            cost_str,
             btw_badge,
-            session.model,
-            loop_badge,
             fmt_tokens(used),
             fmt_tokens(ctx),
             pct,
@@ -106,6 +83,7 @@ impl StatusLine {
             token_detail,
             compact_badge,
             state,
+            loop_badge,
             prompt_badge,
             perm_badge,
         )

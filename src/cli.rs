@@ -235,7 +235,7 @@ impl Cli {
         // model valid for it so `--provider anthropic` does not keep the
         // Anthropic default id; otherwise fall back to claude-sonnet-4-6.
         if (self.provider.is_some() || cfg.provider.is_some())
-            && let Some((model, _)) =
+            && let Some(model) =
                 crate::provider::default_model_for_provider(&self.resolve_provider(cfg), cfg)
         {
             return CompactString::new(model);

@@ -2,15 +2,14 @@ use std::collections::HashMap;
 use std::sync::{Arc, LazyLock, Mutex};
 
 use crate::cli::Cli;
-use crate::config::{self, Config};
+use crate::config::{self, Config, QuickModelConfig};
 use crate::provider::{AnyClient, ModelEntry, list_models_manual};
 use crate::ui::slash::{SlashCtx, write_error, write_ok, write_result};
 
 pub async fn handle(parts: &[&str], ctx: &mut SlashCtx<'_>) -> anyhow::Result<()> {
     match parts[0] {
         "/provider" => handle_provider(parts, ctx).await,
-        "/model" => handle_model(parts, ctx).await,
-        "/models" => handle_models(parts, ctx).await,
+        "/model" | "/models" => handle_models(parts, ctx).await,
         "/models-add" => handle_models_add(parts, ctx).await,
         #[cfg(feature = "subagents")]
         "/model-subagent" => handle_model_subagent(parts, ctx).await,
@@ -141,13 +140,8 @@ async fn handle_provider(parts: &[&str], ctx: &mut SlashCtx<'_>) -> anyhow::Resu
     // Default the model to something valid for the new provider BEFORE rebuilding,
     // since rebuild_agent_with_client reads session.model. Otherwise the old id
     // (e.g. an OpenRouter id) is carried onto a provider where it is invalid.
-    if let Some((model, costs)) = crate::provider::default_model_for_provider(new_provider, ctx.cfg)
-    {
+    if let Some(model) = crate::provider::default_model_for_provider(new_provider, ctx.cfg) {
         ctx.session.model = compact_str::CompactString::new(&model);
-        if let Some((inc, outc)) = costs {
-            ctx.session.input_token_cost = inc;
-            ctx.session.output_token_cost = outc;
-        }
     }
     ctx.rebuild_agent_with_client(new_provider, *ctx.reasoning_enabled)
         .await?;
@@ -163,195 +157,168 @@ async fn handle_provider(parts: &[&str], ctx: &mut SlashCtx<'_>) -> anyhow::Resu
     Ok(())
 }
 
-async fn handle_model(parts: &[&str], ctx: &mut SlashCtx<'_>) -> anyhow::Result<()> {
-    if parts.len() < 2 {
-        write_ok(
-            ctx.renderer,
-            format!("current model: {}", ctx.session.model),
-        );
-        return Ok(());
-    }
-    let new_model = compact_str::CompactString::new(parts[1].trim());
-    let model = ctx.client.completion_model(new_model.to_string());
-    *ctx.agent = Some(
-        crate::provider::build_agent(
-            model,
-            ctx.cli,
-            ctx.cfg,
-            ctx.context,
-            ctx.permission.clone(),
-            ctx.ask_tx.clone(),
-            ctx.sandbox.clone(),
-            *ctx.reasoning_enabled,
-            #[cfg(feature = "mcp")]
-            ctx.mcp_manager,
-        )
-        .await,
-    );
-    ctx.session.model = new_model.clone();
-    let _ = config::save_provider_and_model(&ctx.session.provider, &new_model);
-    write_ok(ctx.renderer, format!("switched to model: {}", new_model));
-    Ok(())
-}
-
 async fn handle_models(parts: &[&str], ctx: &mut SlashCtx<'_>) -> anyhow::Result<()> {
     let qm = config::quick_models_map(ctx.cfg);
     let provider = ctx.session.provider.to_string();
     let is_custom = ctx.cfg.custom_providers_map().contains_key(&provider);
 
-    let refresh = parts.get(1).map(|s| s.trim()) == Some("refresh");
+    let arg1 = parts.get(1).map(|s| s.trim()).unwrap_or("");
+    let show_all = arg1 == "all";
+    let show_list = arg1 == "list";
+    let refresh = arg1 == "refresh";
 
-    // /models <name-or-id> — quick-model name first, else raw model id for current provider
-    if parts.len() >= 2 && !refresh {
-        let arg = parts[1].trim();
-        if let Some(q) = qm.get(arg) {
+    // /models <name-or-id> — quick-model alias first, then raw model id
+    if parts.len() >= 2 && !show_all && !show_list && !refresh {
+        if let Some(q) = qm.get(arg1) {
             ctx.rebuild_agent_with_client(&q.provider, *ctx.reasoning_enabled)
                 .await?;
             apply_model(ctx, &q.model).await;
             ctx.session.provider = compact_str::CompactString::new(&q.provider);
-            // preserve v1.4.x pricing/cost tracking
-            ctx.session.input_token_cost = q.input_token_cost;
-            ctx.session.output_token_cost = q.output_token_cost;
             write_result(
                 ctx.renderer,
-                format!(
-                    "  quick model {} — ${:.4}/M in  ${:.4}/M out",
-                    arg, q.input_token_cost, q.output_token_cost
-                ),
+                format!("  quick model {} — {} / {}", arg1, q.provider, q.model),
             );
             return Ok(());
         }
-        apply_model(ctx, arg).await;
+        apply_model(ctx, arg1).await;
         return Ok(());
     }
 
-    // ---- list mode (+ optional refresh) ----
-    match fetch_models_cached(&provider, is_custom, ctx.client, ctx.cli, ctx.cfg, refresh).await {
+    // Warm the cache so the picker has live names; get the count for the hint.
+    let available_count = match fetch_models_cached(
+        &provider, is_custom, ctx.client, ctx.cli, ctx.cfg, refresh,
+    )
+    .await
+    {
         Ok(models) => {
             ctx.input.set_live_model_names(cached_model_ids(&provider));
             if refresh {
-                // Explicit refresh: just confirm with a count overview — the picker
-                // already holds the full list, so don't dump it to the scrollback.
-                // Dim (DarkGrey), matching the "loaded AGENTS.md" startup notices.
                 write_result(
                     ctx.renderer,
                     format!(
-                        "model list refreshed — quick models: {}, {} models: {}",
-                        qm.len(),
-                        provider,
-                        models.len()
+                        "model list refreshed — {} models from {}",
+                        models.len(),
+                        provider
                     ),
                 );
-            } else {
-                // Full listing: quick models, then the provider's available models.
-                let mut sorted: Vec<&String> = qm.keys().collect();
-                sorted.sort();
+                return Ok(());
+            }
+            if show_list {
+                // Full dump requested explicitly.
                 write_ok(
                     ctx.renderer,
-                    format!(
-                        "quick models (current: {} | {}):",
-                        ctx.session.provider, ctx.session.model
-                    ),
+                    format!("available from {} ({}):", provider, models.len()),
                 );
-                if sorted.is_empty() {
-                    write_result(ctx.renderer, "  (none — add with /models-add)");
+                for m in models.iter() {
+                    let ctx_win = m
+                        .context_length
+                        .map(|c| format!("  [{}k ctx]", c / 1000))
+                        .unwrap_or_default();
+                    let label = if m.display == m.id {
+                        m.id.clone()
+                    } else {
+                        format!("{} ({})", m.display, m.id)
+                    };
+                    write_result(ctx.renderer, format!("  {}{}", label, ctx_win));
                 }
-                for name in &sorted {
-                    let q = &qm[name.as_str()];
-                    write_result(
-                        ctx.renderer,
-                        format!(
-                            "  {}  ({} / {})  ${:.4}/M in  ${:.4}/M out",
-                            name, q.provider, q.model, q.input_token_cost, q.output_token_cost
-                        ),
-                    );
-                }
-                if !models.is_empty() {
-                    write_ok(
-                        ctx.renderer,
-                        format!("available from {} ({}):", provider, models.len()),
-                    );
-                    const CAP: usize = 50;
-                    for m in models.iter().take(CAP) {
-                        let ctx_win = m
-                            .context_length
-                            .map(|c| format!("  [{}k ctx]", c / 1000))
-                            .unwrap_or_default();
-                        let label = if m.display == m.id {
-                            m.id.clone()
-                        } else {
-                            format!("{} ({})", m.display, m.id)
-                        };
-                        write_result(ctx.renderer, format!("  {}{}", label, ctx_win));
-                    }
-                    if models.len() > CAP {
-                        write_result(
-                            ctx.renderer,
-                            format!(
-                                "  … {} more — type /models <filter> or use the picker",
-                                models.len() - CAP
-                            ),
-                        );
-                    }
-                }
+                return Ok(());
             }
+            models.len()
         }
         Err(e) => {
             tracing::debug!("model listing failed for {}: {}", provider, e);
             if refresh {
                 write_error(ctx.renderer, format!("model list refresh failed: {}", e));
-            } else if is_custom {
+                return Ok(());
+            }
+            0
+        }
+    };
+
+    // Default listing: current model, then quick models for this provider.
+    write_ok(
+        ctx.renderer,
+        format!("model: {}  [{}]", ctx.session.model, provider),
+    );
+
+    let mut sorted: Vec<&String> = qm.keys().collect();
+    sorted.sort();
+    let provider_qm: Vec<(&String, &QuickModelConfig)> = if show_all {
+        sorted.iter().map(|n| (*n, &qm[*n])).collect()
+    } else {
+        sorted
+            .iter()
+            .filter(|n| qm[**n].provider.as_str() == provider)
+            .map(|n| (*n, &qm[*n]))
+            .collect()
+    };
+
+    if provider_qm.is_empty() && !show_all {
+        write_result(
+            ctx.renderer,
+            format!(
+                "  no quick models for {} — /models all or /models-add <name> {} <model>",
+                provider, provider
+            ),
+        );
+    } else {
+        let name_w = provider_qm.iter().map(|(n, _)| n.len()).max().unwrap_or(0);
+        for (name, q) in &provider_qm {
+            let active = if q.model.as_str() == ctx.session.model.as_str() {
+                " ←"
+            } else {
+                ""
+            };
+            if show_all {
                 write_result(
                     ctx.renderer,
-                    "  (live model list unavailable; type the model id directly)",
+                    format!("  {name:<name_w$}  {}/{}{}", q.provider, q.model, active),
+                );
+            } else {
+                write_result(
+                    ctx.renderer,
+                    format!("  {name:<name_w$}  {}{}", q.model, active),
                 );
             }
         }
     }
+
+    if available_count > 0 {
+        write_result(
+            ctx.renderer,
+            format!(
+                "  {} available — use picker (Tab) or /models list",
+                available_count
+            ),
+        );
+    }
+
     Ok(())
 }
 
 async fn handle_models_add(parts: &[&str], ctx: &mut SlashCtx<'_>) -> anyhow::Result<()> {
     if parts.len() < 3 {
-        write_ok(
-            ctx.renderer,
-            "usage: /models-add <name> <provider> <model> [input_cost_per_M output_cost_per_M]",
-        );
+        write_ok(ctx.renderer, "usage: /models-add <name> <provider> <model>");
         return Ok(());
     }
     let name = parts[1].trim().to_string();
     let rest = parts[2].trim();
-    let (provider, model, input_cost, output_cost) = match rest.split_once(' ') {
-        Some((p, m)) if parts.len() >= 5 => (
-            p.trim().to_string(),
-            m.trim().to_string(),
-            parts[3].trim().parse::<f64>().unwrap_or(0.0),
-            parts[4].trim().parse::<f64>().unwrap_or(0.0),
-        ),
-        Some((p, m)) => (p.trim().to_string(), m.trim().to_string(), 0.0, 0.0),
+    let (provider, model) = match rest.split_once(' ') {
+        Some((p, m)) => (p.trim().to_string(), m.trim().to_string()),
         None => {
-            write_ok(
-                ctx.renderer,
-                "usage: /models-add <name> <provider> <model> [input_cost_per_M output_cost_per_M]",
-            );
+            write_ok(ctx.renderer, "usage: /models-add <name> <provider> <model>");
             return Ok(());
         }
     };
     if name.is_empty() || provider.is_empty() || model.is_empty() {
-        write_ok(
-            ctx.renderer,
-            "usage: /models-add <name> <provider> <model> [input_cost_per_M output_cost_per_M]",
-        );
+        write_ok(ctx.renderer, "usage: /models-add <name> <provider> <model>");
         return Ok(());
     }
-    match config::save_quick_model(&name, &provider, &model, input_cost, output_cost) {
+    match config::save_quick_model(&name, &provider, &model) {
         Ok(()) => {
             write_ok(
                 ctx.renderer,
-                format!(
-                    "saved quick model: {} ({} / {})  ${}/M in  ${}/M out",
-                    name, provider, model, input_cost, output_cost
-                ),
+                format!("saved quick model: {} ({} / {})", name, provider, model),
             );
         }
         Err(e) => {
@@ -417,10 +384,7 @@ async fn handle_models_subagent(parts: &[&str], ctx: &mut SlashCtx<'_>) -> anyho
                 let q = &qm[name.as_str()];
                 write_result(
                     ctx.renderer,
-                    format!(
-                        "  {}  ({} / {})  ${:.4}/M in  ${:.4}/M out",
-                        name, q.provider, q.model, q.input_token_cost, q.output_token_cost
-                    ),
+                    format!("  {}  ({} / {})", name, q.provider, q.model),
                 );
             }
         }
@@ -447,8 +411,8 @@ async fn handle_models_subagent(parts: &[&str], ctx: &mut SlashCtx<'_>) -> anyho
         write_ok(
             ctx.renderer,
             format!(
-                "switched subagent to quick model: {} ({} / {})  ${:.4}/M in  ${:.4}/M out",
-                name, q.provider, q.model, q.input_token_cost, q.output_token_cost
+                "switched subagent to quick model: {} ({} / {})",
+                name, q.provider, q.model
             ),
         );
     } else {

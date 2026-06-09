@@ -1,9 +1,12 @@
 use crossterm::event::KeyEvent;
+use crossterm::style::Color;
 
 use crate::ui::pickers::file::FilePicker;
 use crate::ui::pickers::handlers;
 use crate::ui::pickers::list::ListPicker;
 use crate::ui::pickers::models::ModelsPicker;
+use crate::ui::renderer::LineEntry;
+use compact_str::CompactString;
 
 pub enum Picker {
     File(FilePicker),
@@ -29,6 +32,19 @@ impl Picker {
             Picker::Prefixed(p, _) => p.set_monochrome(monochrome),
             Picker::Models(p) => p.set_monochrome(monochrome),
         }
+    }
+
+    pub fn header(&self) -> Option<LineEntry> {
+        let text = match self {
+            Picker::File(p) => p.header_text(),
+            Picker::Command(p) => p.header_text(None),
+            Picker::Prefixed(p, prefix) => p.header_text(Some(prefix)),
+            Picker::Models(p) => p.header_text(),
+        };
+        Some(LineEntry {
+            text: CompactString::from(text),
+            color: Color::White,
+        })
     }
 
     pub fn draw(&mut self) -> std::io::Result<()> {

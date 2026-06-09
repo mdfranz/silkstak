@@ -89,8 +89,6 @@ fn make_qm(provider: &str, model: &str) -> QuickModelConfig {
     QuickModelConfig {
         provider: provider.into(),
         model: model.into(),
-        input_token_cost: 0.0,
-        output_token_cost: 0.0,
     }
 }
 

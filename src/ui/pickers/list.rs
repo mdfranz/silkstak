@@ -164,6 +164,15 @@ impl ListPicker {
         self.matches.get(self.selected).map(|s| s.as_str())
     }
 
+    pub fn header_text(&self, prefix: Option<&str>) -> String {
+        match prefix {
+            Some("/prompt ") => "select system prompt".to_string(),
+            Some("/theme ") => "select color theme".to_string(),
+            Some("/provider ") => "select or type custom provider".to_string(),
+            _ => "Tab to select · arrows to navigate".to_string(),
+        }
+    }
+
     pub fn draw(&self, empty_message: Option<&str>) -> std::io::Result<()> {
         if !self.active {
             return Ok(());

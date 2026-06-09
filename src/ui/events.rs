@@ -90,6 +90,9 @@ pub fn render_session(
             }
         }
         renderer.write_line("", Color::White)?;
+        if msg.role == MessageRole::User {
+            renderer.write_line("", Color::White)?;
+        }
     }
     Ok(())
 }

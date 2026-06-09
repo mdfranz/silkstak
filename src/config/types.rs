@@ -7,10 +7,6 @@ use serde::{Deserialize, Serialize};
 pub struct QuickModelConfig {
     pub provider: CompactString,
     pub model: CompactString,
-    #[serde(default)]
-    pub input_token_cost: f64,
-    #[serde(default)]
-    pub output_token_cost: f64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

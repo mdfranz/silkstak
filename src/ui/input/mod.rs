@@ -66,14 +66,6 @@ impl InputEditor {
         self.yank_pos = None;
     }
 
-    pub fn set_quick_model_names(&mut self, names: Vec<String>) {
-        self.quick_model_names = names;
-    }
-
-    pub fn quick_model_names(&self) -> &[String] {
-        &self.quick_model_names
-    }
-
     /// Populate quick model names filtered to `provider`, so the picker only
     /// offers models that belong to the active provider. Cross-provider quick
     /// models are still reachable by typing their name directly.

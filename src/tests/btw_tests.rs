@@ -55,7 +55,6 @@ fn snapshot_does_not_mutate_session() {
     let before_len = session.messages.len();
     let before_in = session.total_input_tokens;
     let before_out = session.total_output_tokens;
-    let before_cost = session.total_cost;
 
     let trace = [CompactString::from("→ read: src/main.rs")];
     let _ = build_btw_snapshot(&session, &trace, true);
@@ -65,7 +64,6 @@ fn snapshot_does_not_mutate_session() {
     assert_eq!(session.messages.len(), before_len);
     assert_eq!(session.total_input_tokens, before_in);
     assert_eq!(session.total_output_tokens, before_out);
-    assert_eq!(session.total_cost, before_cost);
 
     // touch `session` mutably so the binding is legitimately `mut`.
     session.add_message(MessageRole::User, "again");

@@ -156,6 +156,10 @@ impl FilePicker {
         self.matches.get(self.selected)
     }
 
+    pub fn header_text(&self) -> String {
+        "Tab to select · @ to search · arrows to navigate".to_string()
+    }
+
     #[cfg(test)]
     pub fn test_set_cache(&mut self, files: Vec<PathBuf>) {
         *self.file_cache.lock().unwrap_or_else(|e| e.into_inner()) = files;

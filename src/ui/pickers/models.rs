@@ -1,12 +1,4 @@
-use std::io::Write;
-
-use crossterm::ExecutableCommand;
-use crossterm::cursor::MoveTo;
-use crossterm::style::{Color, ResetColor, SetForegroundColor};
-use crossterm::terminal::Clear;
-
-use super::super::utils::resolve_color;
-use super::{draw_picker_list, fuzzy_score};
+use crate::ui::pickers::{draw_picker_list, fuzzy_score};
 
 pub struct ModelsPicker {
     pub active: bool,
@@ -42,10 +34,6 @@ impl ModelsPicker {
     pub fn set_groups(&mut self, quick: Vec<String>, provider: Vec<String>) {
         self.quick = quick;
         self.provider = provider;
-    }
-
-    fn color(&self, color: Color) -> Color {
-        resolve_color(color, self.monochrome)
     }
 
     pub fn activate(&mut self) {
@@ -137,46 +125,25 @@ impl ModelsPicker {
         self.matches.get(self.selected).map(|s| s.as_str())
     }
 
+    pub fn header_text(&self) -> String {
+        let tab = |label: &str, count: usize, active: bool| {
+            if active {
+                format!("[{} {}]", label, count)
+            } else {
+                format!(" {} {} ", label, count)
+            }
+        };
+        format!(
+            "{}  {}   (Tab to switch · /models refresh for the latest)",
+            tab("Quick", self.quick.len(), self.group == 0),
+            tab("Provider", self.provider.len(), self.group == 1)
+        )
+    }
+
     pub fn draw(&self) -> std::io::Result<()> {
         if !self.active {
             return Ok(());
         }
-        let (_cols, rows) = crossterm::terminal::size()?;
-        let mut stdout = std::io::stdout();
-
-        let max_items = (rows.saturating_sub(5)).min(10) as usize;
-        let list_height = max_items.min(self.matches.len().max(1));
-        let top_row = rows.saturating_sub(3).saturating_sub(list_height as u16);
-
-        if rows >= 8 {
-            let header_row = top_row.saturating_sub(1);
-            stdout.execute(MoveTo(0, header_row))?;
-            write!(
-                stdout,
-                "{}",
-                Clear(crossterm::terminal::ClearType::CurrentLine)
-            )?;
-            let tab = |label: &str, count: usize, active: bool| {
-                if active {
-                    format!("[{} {}]", label, count)
-                } else {
-                    format!(" {} {} ", label, count)
-                }
-            };
-            write!(
-                stdout,
-                "{}",
-                SetForegroundColor(self.color(Color::DarkGrey))
-            )?;
-            write!(
-                stdout,
-                "{}  {}   (Tab to switch · /models refresh for the latest)",
-                tab("Quick", self.quick.len(), self.group == 0),
-                tab("Provider", self.provider.len(), self.group == 1)
-            )?;
-            write!(stdout, "{}", ResetColor)?;
-        }
-
         draw_picker_list(&self.matches, self.selected, self.monochrome, None, 5, &[])
     }
 }

@@ -5,7 +5,6 @@ use compact_str::CompactString;
 
 use crate::config::{Config, EditSystem, QuickModelConfig, ShowToolDetails};
 #[cfg(feature = "mcp")]
-use crate::extras::mcp::config::McpServerConfig;
 use crate::session::storage;
 
 fn resolve_config_path() -> PathBuf {
@@ -59,8 +58,6 @@ fn default_quick_models() -> HashMap<String, QuickModelConfig> {
         QuickModelConfig {
             provider: CompactString::new("anthropic"),
             model: CompactString::new("claude-haiku-4-5"),
-            input_token_cost: 0.0,
-            output_token_cost: 0.0,
         },
     );
     map.insert(
@@ -68,8 +65,6 @@ fn default_quick_models() -> HashMap<String, QuickModelConfig> {
         QuickModelConfig {
             provider: CompactString::new("anthropic"),
             model: CompactString::new("claude-sonnet-4-6"),
-            input_token_cost: 0.0,
-            output_token_cost: 0.0,
         },
     );
 
@@ -79,8 +74,6 @@ fn default_quick_models() -> HashMap<String, QuickModelConfig> {
         QuickModelConfig {
             provider: CompactString::new("openai"),
             model: CompactString::new("gpt-5-mini"),
-            input_token_cost: 0.0,
-            output_token_cost: 0.0,
         },
     );
     map.insert(
@@ -88,8 +81,6 @@ fn default_quick_models() -> HashMap<String, QuickModelConfig> {
         QuickModelConfig {
             provider: CompactString::new("openai"),
             model: CompactString::new("gpt-5"),
-            input_token_cost: 0.0,
-            output_token_cost: 0.0,
         },
     );
 
@@ -99,8 +90,6 @@ fn default_quick_models() -> HashMap<String, QuickModelConfig> {
         QuickModelConfig {
             provider: CompactString::new("gemini"),
             model: CompactString::new("gemini-3.5-flash"),
-            input_token_cost: 0.0,
-            output_token_cost: 0.0,
         },
     );
     map.insert(
@@ -108,8 +97,6 @@ fn default_quick_models() -> HashMap<String, QuickModelConfig> {
         QuickModelConfig {
             provider: CompactString::new("gemini"),
             model: CompactString::new("gemini-2.5-pro"),
-            input_token_cost: 0.0,
-            output_token_cost: 0.0,
         },
     );
 
@@ -216,13 +203,7 @@ pub fn save_configure_data(
     )
 }
 
-pub fn save_quick_model(
-    name: &str,
-    provider: &str,
-    model: &str,
-    input_token_cost: f64,
-    output_token_cost: f64,
-) -> std::io::Result<()> {
+pub fn save_quick_model(name: &str, provider: &str, model: &str) -> std::io::Result<()> {
     let path = resolve_config_path();
     let mut cfg: Config = if path.exists() {
         let content = std::fs::read_to_string(&path).unwrap_or_default();
@@ -240,8 +221,6 @@ pub fn save_quick_model(
         QuickModelConfig {
             provider: CompactString::new(provider),
             model: CompactString::new(model),
-            input_token_cost,
-            output_token_cost,
         },
     );
 
@@ -326,23 +305,6 @@ pub fn load() -> Config {
             }),
         }
     };
-
-    #[cfg(feature = "mcp")]
-    if cfg.mcp_servers.is_none() {
-        let mut headers = HashMap::new();
-        if let Ok(key) = std::env::var("EXA_API_KEY") {
-            headers.insert("x-api-key".to_string(), key);
-        }
-        let mut defaults = HashMap::new();
-        defaults.insert(
-            "Exa Web Search".to_string(),
-            McpServerConfig::Url {
-                url: "https://mcp.exa.ai/mcp".to_string(),
-                headers,
-            },
-        );
-        cfg.mcp_servers = Some(defaults);
-    }
 
     cfg
 }
