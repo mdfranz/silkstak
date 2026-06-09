@@ -29,8 +29,8 @@ Example (JSON):
 
 ```json
 {
-  "provider": "openrouter",
-  "model": "deepseek/deepseek-v4-flash",
+  "provider": "anthropic",
+  "model": "claude-sonnet-4-6",
   "max_tokens": 16384,
   "temperature": 0.7,
   "context_window": 128000,
@@ -92,8 +92,8 @@ Example (JSON):
 The same config in TOML:
 
 ```toml
-provider = "openrouter"
-model = "deepseek/deepseek-v4-flash"
+provider = "anthropic"
+model = "claude-sonnet-4-6"
 max_tokens = 16384
 temperature = 0.7
 context_window = 128000
@@ -138,8 +138,8 @@ Accepted top-level keys:
 
 | Key                       | Type    | Description                                                                                                                                                                 |
 | ------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `provider`                | string  | Provider name. Built-ins are `openrouter`, `openai`, `anthropic`, `gemini`/`google`, and `ollama`; custom provider aliases are also accepted. Default: `openrouter`.        |
-| `model`                   | string  | Model name. Default: `deepseek/deepseek-v4-flash`.                                                                                                                          |
+| `provider`                | string  | Provider name. Built-ins are `openai`, `anthropic`, `gemini`/`google`, and `ollama`; custom provider aliases are also accepted. Default: `anthropic`.                      |
+| `model`                   | string  | Model name. Default: `claude-sonnet-4-6`.                                                                                                                                   |
 | `max_tokens`              | integer | Maximum response tokens. Default: `16384`.                                                                                                                                  |
 | `max_agent_turns`         | integer | Maximum agent turns per response. Default: `200`.                                                                                                                           |
 | `temperature`             | number  | Model temperature value. Only configurable via the `--temperature` CLI flag (`0.0` to `2.0`). Config-file value is parsed but not currently applied.                        |

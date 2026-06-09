@@ -113,10 +113,6 @@ fn auth_resolver_errors_when_no_key_available() {
 #[test]
 fn provider_kind_from_name_recognizes_all() {
     assert_eq!(
-        ProviderKind::from_name("openrouter"),
-        Some(ProviderKind::OpenRouter)
-    );
-    assert_eq!(
         ProviderKind::from_name("openai"),
         Some(ProviderKind::OpenAI)
     );

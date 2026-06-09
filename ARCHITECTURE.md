@@ -40,14 +40,16 @@ Single crate, no workspace. All source under `src/`.
 
 ## Control Flow
 
-```
-CLI parse (main.rs:88) → config load → context load → session load
-  │
-  ├── --print-config → print and exit
-  ├── --acp → extras::acp::serve()
-  ├── --print → single agent.run_print() response
-  ├── --loop → run_headless_loop() iterative mode
-  └── (default) → ui::run_interactive()
+```mermaid
+graph TD
+    A[main.rs] --> B(Parse CLI & Load Config)
+    B --> C(Load Context & Session)
+    C --> D{Execution Mode}
+    D -->|--print-config| E[Print config & Exit]
+    D -->|--acp| F[extras::acp::serve]
+    D -->|--print| G[agent.run_print]
+    D -->|--loop| H[run_headless_loop]
+    D -->|Default| I[ui::run_interactive]
 ```
 
 ### Interactive TUI Event Loop (`src/ui/mod.rs`)
@@ -58,24 +60,89 @@ Single `tokio::select!` with 4 branches (line ~310):
 3. **Permission `AskRequest` from `ask_rx`** — user must approve/reject tool calls
 4. **Periodic refresh** (100ms) — spinner animation when agent is running
 
+```mermaid
+graph TD
+    Start((TUI Event Loop)) --> Select{tokio::select!}
+    
+    Select -->|user_rx| UE[UserEvent]
+    Select -->|agent_rx| AE[AgentEvent]
+    Select -->|ask_rx| Ask[Permission AskRequest]
+    Select -->|Periodic| Refresh[Spinner/Refresh]
+    
+    UE -->|Key/Paste| Input[InputEditor]
+    UE -->|Resize/Mouse| RenderUpdate[Renderer Update]
+    
+    Input -->|Submit| Spawn[spawn_agent]
+    Spawn -->|Streaming Rx| Select
+    
+    AE -->|Token/Reasoning| UpdateSession[Update Session]
+    AE -->|ToolCall| PermCheck[PermissionChecker]
+    AE -->|Done| SaveSession[Save Session]
+    
+    UpdateSession --> RenderUpdate
+    
+    PermCheck -->|Allowed| ExecTool[Execute Tool]
+    PermCheck -->|Denied| ToolResult[Tool Error]
+    PermCheck -->|Ask| AskTx[Send AskRequest]
+    
+    AskTx -->|via ask_rx| Ask
+    Ask --> UserInput[User Approves/Rejects]
+    UserInput -->|Approved| ExecTool
+    UserInput -->|Rejected| ToolResult
+    
+    ExecTool -->|ToolResult| Agent[Agent Stream]
+```
+
 Key dispatch: `InputEditor::handle_key()` → `Some(text)` triggers `spawn_agent()` → stream events via `handle_agent_event()` which writes to `Renderer` and appends to `Session`.
 
 ## Data Flow
 
-```
-User input → InputEditor (buffer) → spawn_agent(prompt + history)
-  │
-  ▼
-Agent (rig) → CompletionModel (LLM API)
-  │
-  ▼ streaming
-AgentEvent stream (Token, ToolCall, ToolResult, ...)
-  │
-  ├── handle_agent_event() → Renderer (viewport buffer) → crossterm draw commands
-  ├── ToolCall → PermissionChecker.check() → {Allowed, Ask, Denied}
-  │     ├── Ask → permission_handler (user approves/rejects via UI)
-  │     └── Allowed → tool execution (bash/read/write/edit/grep/etc.)
-  └── Done → Session.append() → session::storage::save_session()
+```mermaid
+sequenceDiagram
+    actor User
+    participant TUI as InputEditor / Renderer
+    participant Runner as spawn_agent
+    participant Agent as rig Framework
+    participant LLM as Provider API
+    participant Perms as PermissionChecker
+    participant Tools as Tool Execution
+
+    User->>TUI: Types prompt & submits
+    TUI->>Runner: spawn_agent(prompt, history)
+    Runner->>Agent: stream_chat()
+    Agent->>LLM: API Request
+    
+    loop Streaming Response
+        LLM-->>Agent: Token/Reasoning Chunk
+        Agent-->>Runner: StreamedAssistantContent
+        Runner-->>TUI: AgentEvent::Token
+        TUI->>User: Renders text
+    end
+    
+    LLM-->>Agent: Tool Call Request
+    Agent-->>Runner: ToolCall
+    Runner-->>TUI: AgentEvent::ToolCall
+    TUI->>Perms: check(tool, args)
+    
+    alt Allowed
+        Perms-->>TUI: Allowed
+        TUI->>Tools: Execute
+    else Ask
+        Perms-->>TUI: Ask
+        TUI->>User: Show prompt UI
+        User->>TUI: Approves
+        TUI->>Tools: Execute
+    end
+    
+    Tools-->>TUI: Result Output
+    TUI->>Runner: inject result
+    Runner->>Agent: continue_stream()
+    Agent->>LLM: Submit Result
+    
+    LLM-->>Agent: Final Response
+    Agent-->>Runner: Done
+    Runner-->>TUI: AgentEvent::Done
+    TUI->>TUI: Save Session
 ```
 
 Session is serialized to JSON files in `$XDG_DATA_HOME/zerostack/sessions/`. Chat history appended to `$XDG_DATA_HOME/zerostack/chat_history.jsonl`.

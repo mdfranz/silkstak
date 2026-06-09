@@ -37,56 +37,6 @@ _zerostack_ is one of the smallest and most performant coding agents on the mark
 - RAM footprint: ~16MB on average, with peaks at ~24MB (vs ~300MB with peaks at ~700MB for opencode or other JS-based coding agents)
 - CPU usage: 0.0% on idle, ~1.5% when using tools (measured on an Intel i5 7th gen, vs ~2% on idle and ~20% when working for opencode)
 
-## Installation
-
-### Basic installation (recommended)
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/gi-dellav/zerostack/main/install.sh | bash
-```
-
-Or pick a tarball manually from [GitHub Releases](https://github.com/gi-dellav/zerostack/releases).
-
-### Nix
-
-```bash
-# Run directly
-nix run github:gi-dellav/zerostack
-
-# Install into your profile
-nix profile install github:gi-dellav/zerostack
-```
-
-### Arch Linux (AUR) [work in progress]
-
-```bash
-yay -S zerostack-bin
-```
-
-(note: You can use any AUR helper)
-
-### Conda [work in progress]
-
-```bash
-conda install zerostack
-```
-
-### Cargo
-
-```bash
-# Default: loop, git-worktree, mcp, subagents, archmd
-cargo install zerostack
-
-# With all features
-cargo install zerostack --all-features
-
-# With specific features
-cargo install zerostack --features acp,memory,multithread
-```
-
-Once installed, run `/prompt autoconfig` inside zerostack to explore the documentation and configure the tool interactively.
-
-_note:_ If you have questions or you want to collaborate on the project, please join the [dedicated Matrix chatroom](https://app.element.io/#/room/#zerostack-general:matrix.org).
 
 ### Optional: sandbox mode
 
@@ -365,8 +315,6 @@ ACP mode requires setting up an LLM provider (the standard `--provider`, `--mode
 and API key env vars apply). Without it, zerostack cannot process prompts.
 
 ## Supported providers
-
-- OpenRouter (default)
 - OpenAI-compatible (vLLM, LiteLLM, etc.)
 - Anthropic
 - Gemini

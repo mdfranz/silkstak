@@ -1,3 +1,6 @@
+use std::collections::HashMap;
+
+use crate::config::QuickModelConfig;
 use crate::ui::input::InputEditor;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
@@ -80,4 +83,57 @@ fn enter_returns_buffer_and_resets() {
     assert_eq!(out.as_str(), "hei på");
     assert_eq!(editor.cursor, 0);
     assert_eq!(editor.buffer.as_str(), "");
+}
+
+fn make_qm(provider: &str, model: &str) -> QuickModelConfig {
+    QuickModelConfig {
+        provider: provider.into(),
+        model: model.into(),
+        input_token_cost: 0.0,
+        output_token_cost: 0.0,
+    }
+}
+
+#[test]
+fn quick_models_filtered_to_current_provider() {
+    let mut editor = InputEditor::new();
+    let mut qm: HashMap<String, QuickModelConfig> = HashMap::new();
+    qm.insert(
+        "haiku".to_string(),
+        make_qm("anthropic", "claude-haiku-4-5"),
+    );
+    qm.insert(
+        "sonnet".to_string(),
+        make_qm("anthropic", "claude-sonnet-4-6"),
+    );
+    qm.insert("gpt".to_string(), make_qm("openai", "gpt-5"));
+    qm.insert(
+        "gemini-pro".to_string(),
+        make_qm("gemini", "gemini-2.5-pro"),
+    );
+
+    editor.update_quick_models_for_provider("anthropic", &qm);
+    let mut names = editor.quick_model_names().to_vec();
+    names.sort();
+    assert_eq!(names, vec!["haiku", "sonnet"]);
+
+    editor.update_quick_models_for_provider("openai", &qm);
+    let names = editor.quick_model_names().to_vec();
+    assert_eq!(names, vec!["gpt"]);
+
+    editor.update_quick_models_for_provider("gemini", &qm);
+    let names = editor.quick_model_names().to_vec();
+    assert_eq!(names, vec!["gemini-pro"]);
+}
+
+#[test]
+fn quick_models_empty_for_unknown_provider() {
+    let mut editor = InputEditor::new();
+    let mut qm: HashMap<String, QuickModelConfig> = HashMap::new();
+    qm.insert(
+        "sonnet".to_string(),
+        make_qm("anthropic", "claude-sonnet-4-6"),
+    );
+    editor.update_quick_models_for_provider("ollama", &qm);
+    assert!(editor.quick_model_names().is_empty());
 }

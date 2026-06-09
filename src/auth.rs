@@ -4,7 +4,6 @@ use std::env::VarError;
 /// Kind of AI provider
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProviderKind {
-    OpenRouter,
     OpenAI,
     Anthropic,
     Gemini,
@@ -14,7 +13,6 @@ pub enum ProviderKind {
 impl ProviderKind {
     pub fn from_name(name: &str) -> Option<Self> {
         match name.to_lowercase().as_str() {
-            "openrouter" => Some(Self::OpenRouter),
             "openai" | "custom" => Some(Self::OpenAI), // "custom" is an alias for OpenAI client
             "anthropic" => Some(Self::Anthropic),
             "gemini" | "google" => Some(Self::Gemini),
@@ -131,13 +129,11 @@ impl AuthResolver {
             ProviderKind::Anthropic => "ANTHROPIC_API_KEY",
             ProviderKind::Gemini => "GEMINI_API_KEY",
             ProviderKind::Ollama => "OLLAMA_API_KEY",
-            ProviderKind::OpenRouter => "OPENROUTER_API_KEY",
         }
     }
 
     fn provider_slug(&self) -> &'static str {
         match self.provider_kind {
-            ProviderKind::OpenRouter => "openrouter",
             ProviderKind::OpenAI => "openai",
             ProviderKind::Anthropic => "anthropic",
             ProviderKind::Gemini => "gemini",

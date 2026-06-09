@@ -22,6 +22,18 @@ pub struct Cli {
     #[arg(long = "print-config", help = "Print resolved configuration and exit")]
     pub print_config: bool,
 
+    #[arg(
+        long = "show",
+        help = "Show provider, model, and API key configuration then exit"
+    )]
+    pub show: bool,
+
+    #[arg(
+        long = "configure",
+        help = "Interactive setup: set API keys and default provider/model"
+    )]
+    pub configure: bool,
+
     #[arg(short = 'c', long = "continue", help = "Continue most recent session")]
     pub continue_session: bool,
 
@@ -221,7 +233,7 @@ impl Cli {
         }
         // No explicit model. If a provider was chosen explicitly, default to a
         // model valid for it so `--provider anthropic` does not keep the
-        // OpenRouter default id; otherwise keep the historic deepseek default.
+        // Anthropic default id; otherwise fall back to claude-sonnet-4-6.
         if (self.provider.is_some() || cfg.provider.is_some())
             && let Some((model, _)) =
                 crate::provider::default_model_for_provider(&self.resolve_provider(cfg), cfg)
@@ -229,9 +241,9 @@ impl Cli {
             return CompactString::new(model);
         }
         let qm = config::quick_models_map(cfg);
-        qm.get("deepseek-v4-pro")
+        qm.get("sonnet")
             .map(|q| q.model.clone())
-            .unwrap_or_else(|| CompactString::new("deepseek/deepseek-v4-pro"))
+            .unwrap_or_else(|| CompactString::new("claude-haiku-4-5"))
     }
 
     pub fn resolve_provider(&self, cfg: &config::Config) -> CompactString {
@@ -239,12 +251,7 @@ impl Cli {
             .as_deref()
             .or(cfg.provider.as_deref())
             .map(CompactString::new)
-            .unwrap_or_else(|| {
-                let qm = config::quick_models_map(cfg);
-                qm.get("deepseek-v4-pro")
-                    .map(|q| q.provider.clone())
-                    .unwrap_or_else(|| CompactString::new("openrouter"))
-            })
+            .unwrap_or_else(|| CompactString::new("anthropic"))
     }
 
     pub fn resolve_max_tokens(&self, cfg: &config::Config) -> u64 {

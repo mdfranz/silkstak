@@ -12,8 +12,6 @@ fn build_explore_agent_inner<M: CompletionModel + 'static>(
     max_grep_results: u64,
     max_find_results: u64,
     max_list_dir_entries: Option<u64>,
-    // OpenRouter `provider.order` pin for `anthropic/*` (see `AnyClient::completion_model`).
-    additional_params: Option<serde_json::Value>,
     #[cfg(feature = "archmd")] architecture: Option<&str>,
 ) -> Agent<M> {
     let mut preamble = prompt::explore_prompt();
@@ -42,16 +40,11 @@ fn build_explore_agent_inner<M: CompletionModel + 'static>(
         Box::new(crate::extras::memory::MemorySearch::new(None, None)),
     ];
 
-    let mut builder = AgentBuilder::new(model)
+    AgentBuilder::new(model)
         .preamble(&preamble)
         .default_max_turns(max_turns)
-        .tools(tools);
-
-    if let Some(params) = additional_params {
-        builder = builder.additional_params(params);
-    }
-
-    builder.build()
+        .tools(tools)
+        .build()
 }
 
 pub(crate) async fn build_explore_agent(
@@ -68,18 +61,6 @@ pub(crate) async fn build_explore_agent(
     #[cfg(feature = "archmd")]
     let arch_ref = architecture.as_deref();
     match model {
-        AnyModel::OpenRouter(m, extra) => AnyAgent::OpenRouter(build_explore_agent_inner(
-            m,
-            max_turns,
-            max_text_file_size,
-            max_read_lines,
-            max_grep_results,
-            max_find_results,
-            max_list_dir_entries,
-            extra,
-            #[cfg(feature = "archmd")]
-            arch_ref,
-        )),
         AnyModel::OpenAI(m) => AnyAgent::OpenAI(match m {
             OpenAiModel::Responses(m) => OpenAiAgent::Responses(build_explore_agent_inner(
                 m,
@@ -89,7 +70,6 @@ pub(crate) async fn build_explore_agent(
                 max_grep_results,
                 max_find_results,
                 max_list_dir_entries,
-                None,
                 #[cfg(feature = "archmd")]
                 arch_ref,
             )),
@@ -101,7 +81,6 @@ pub(crate) async fn build_explore_agent(
                 max_grep_results,
                 max_find_results,
                 max_list_dir_entries,
-                None,
                 #[cfg(feature = "archmd")]
                 arch_ref,
             )),
@@ -114,7 +93,6 @@ pub(crate) async fn build_explore_agent(
             max_grep_results,
             max_find_results,
             max_list_dir_entries,
-            None,
             #[cfg(feature = "archmd")]
             arch_ref,
         )),
@@ -126,7 +104,6 @@ pub(crate) async fn build_explore_agent(
             max_grep_results,
             max_find_results,
             max_list_dir_entries,
-            None,
             #[cfg(feature = "archmd")]
             arch_ref,
         )),
@@ -138,7 +115,6 @@ pub(crate) async fn build_explore_agent(
             max_grep_results,
             max_find_results,
             max_list_dir_entries,
-            None,
             #[cfg(feature = "archmd")]
             arch_ref,
         )),

@@ -23,10 +23,6 @@ pub async fn build_agent_inner<M: CompletionModel + 'static>(
     ask_tx: Option<AskSender>,
     sandbox: Sandbox,
     reasoning_enabled: bool,
-    // Provider-specific extra body params (e.g. OpenRouter `provider.order` to
-    // pin Claude to the Anthropic direct route so `cache_control` is honored).
-    // `None` for providers that need no extra routing.
-    additional_params: Option<serde_json::Value>,
     #[cfg(feature = "mcp")] mcp_manager: Option<&McpClientManager>,
 ) -> Agent<M> {
     let reasoning_prefix = if reasoning_enabled {
@@ -118,10 +114,6 @@ pub async fn build_agent_inner<M: CompletionModel + 'static>(
     }
 
     let mut builder = AgentBuilder::new(model).preamble(&preamble);
-
-    if let Some(params) = additional_params {
-        builder = builder.additional_params(params);
-    }
 
     let max_tokens = cli.resolve_max_tokens(cfg);
     builder = builder.max_tokens(max_tokens);
@@ -267,8 +259,6 @@ pub fn build_btw_agent_inner<M: CompletionModel + 'static>(
     permission: &Option<PermCheck>,
     ask_tx: &Option<AskSender>,
     _reasoning_enabled: bool,
-    // See `build_agent_inner`: OpenRouter `provider.order` pin for `anthropic/*`.
-    additional_params: Option<serde_json::Value>,
 ) -> Agent<M> {
     let cwd = std::env::current_dir()
         .ok()
@@ -317,9 +307,6 @@ pub fn build_btw_agent_inner<M: CompletionModel + 'static>(
             .preamble(&preamble)
             .default_max_turns(1)
             .max_tokens(max_tokens);
-        if let Some(params) = additional_params.clone() {
-            builder = builder.additional_params(params);
-        }
         if let Some(temp) = cli.temperature {
             builder = builder.temperature(temp.clamp(0.0, 2.0));
         }
@@ -364,10 +351,6 @@ pub fn build_btw_agent_inner<M: CompletionModel + 'static>(
         .default_max_turns(BTW_MAX_TURNS)
         .max_tokens(max_tokens)
         .tools(read_tools);
-
-    if let Some(params) = additional_params {
-        builder = builder.additional_params(params);
-    }
 
     if let Some(temp) = cli.temperature {
         builder = builder.temperature(temp.clamp(0.0, 2.0));

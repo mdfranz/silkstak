@@ -70,6 +70,27 @@ impl InputEditor {
         self.quick_model_names = names;
     }
 
+    pub fn quick_model_names(&self) -> &[String] {
+        &self.quick_model_names
+    }
+
+    /// Populate quick model names filtered to `provider`, so the picker only
+    /// offers models that belong to the active provider. Cross-provider quick
+    /// models are still reachable by typing their name directly.
+    pub fn update_quick_models_for_provider(
+        &mut self,
+        provider: &str,
+        qm: &std::collections::HashMap<String, crate::config::QuickModelConfig>,
+    ) {
+        let mut names: Vec<String> = qm
+            .iter()
+            .filter(|(_, v)| v.provider.as_str() == provider)
+            .map(|(k, _)| k.clone())
+            .collect();
+        names.sort();
+        self.quick_model_names = names;
+    }
+
     pub fn set_live_model_names(&mut self, names: Vec<String>) {
         self.live_model_names = names;
     }

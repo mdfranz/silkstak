@@ -65,22 +65,12 @@ mod tests {
 
     #[test]
     fn catalog_parses_and_has_expected_providers() {
-        for p in ["anthropic", "openai", "gemini", "openrouter"] {
+        for p in ["anthropic", "openai", "gemini"] {
             assert!(
                 !ids(p).is_empty(),
                 "missing or empty baked catalog for: {p}"
             );
         }
-    }
-
-    #[test]
-    fn openrouter_includes_default_model() {
-        // The default model (deepseek-v4-pro on openrouter) must be discoverable
-        // offline so the picker is useful on a fresh, network-blocked start.
-        assert!(
-            ids("openrouter").contains(&"deepseek/deepseek-v4-pro".to_string()),
-            "default model missing from baked openrouter catalog"
-        );
     }
 
     #[test]

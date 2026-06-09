@@ -1,5 +1,5 @@
 use crate::config::{ApiStyle, CustomProviderConfig};
-use crate::provider::{expand_env, resolve_api_style};
+use crate::provider::{expand_env, is_reasoning_model, resolve_api_style};
 
 fn cfg(api_style: Option<ApiStyle>) -> CustomProviderConfig {
     CustomProviderConfig {
@@ -58,4 +58,31 @@ fn expand_env_reads_var() {
 #[test]
 fn expand_env_missing_var_errors() {
     assert!(expand_env("${ZS_DEFINITELY_NOT_SET_98237}").is_err());
+}
+
+#[test]
+fn reasoning_model_o_series_detected() {
+    assert!(is_reasoning_model("o1"));
+    assert!(is_reasoning_model("o1-mini"));
+    assert!(is_reasoning_model("o1-preview"));
+    assert!(is_reasoning_model("o3"));
+    assert!(is_reasoning_model("o3-mini"));
+    assert!(is_reasoning_model("o4-mini"));
+    assert!(is_reasoning_model("o4-mini-2025-04-16"));
+}
+
+#[test]
+fn reasoning_model_with_namespace_prefix() {
+    assert!(is_reasoning_model("openai/o1-mini"));
+    assert!(is_reasoning_model("openai/o3"));
+}
+
+#[test]
+fn non_reasoning_models_not_flagged() {
+    assert!(!is_reasoning_model("gpt-4o"));
+    assert!(!is_reasoning_model("gpt-5"));
+    assert!(!is_reasoning_model("gpt-5-mini"));
+    assert!(!is_reasoning_model("claude-sonnet-4-6"));
+    assert!(!is_reasoning_model("gemini-2.5-pro"));
+    assert!(!is_reasoning_model("ollama3"));
 }

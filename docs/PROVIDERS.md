@@ -1,17 +1,16 @@
 # Providers
 
-zerostack supports five built-in providers and allows custom provider
+zerostack supports four built-in providers and allows custom provider
 definitions for OpenAI-compatible endpoints.
 
 ## Built-in Providers
 
-| Provider   | Config name         | Default env var for API key |
-| ---------- | ------------------- | --------------------------- |
-| OpenRouter | `openrouter`        | `OPENROUTER_API_KEY`        |
-| OpenAI     | `openai`            | `OPENAI_API_KEY`            |
-| Anthropic  | `anthropic`         | `ANTHROPIC_API_KEY`         |
-| Gemini     | `gemini` / `google` | `GEMINI_API_KEY`            |
-| Ollama     | `ollama`            | (no key required)           |
+| Provider  | Config name         | Default env var for API key |
+| --------- | ------------------- | --------------------------- |
+| Anthropic | `anthropic`         | `ANTHROPIC_API_KEY`         |
+| OpenAI    | `openai`            | `OPENAI_API_KEY`            |
+| Gemini    | `gemini` / `google` | `GEMINI_API_KEY`            |
+| Ollama    | `ollama`            | (no key required)           |
 
 Select a provider via the config file, the `--provider` CLI flag, or the
 `ZS_PROVIDER` environment variable:
@@ -52,7 +51,7 @@ the `custom_providers` key in the config file:
 
 | Field                         | Type    | Description                                                                                                                                                                   |
 | ----------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `provider_type`               | string  | Must be one of the built-in provider types (`openrouter`, `openai`, `anthropic`, `gemini`, `ollama`).                                                                         |
+| `provider_type`               | string  | Must be one of the built-in provider types (`openai`, `anthropic`, `gemini`, `ollama`).                                                                                       |
 | `base_url`                    | string  | The API base URL.                                                                                                                                                             |
 | `api_key_env`                 | string  | Optional. Name of an environment variable holding the API key. Falls back to the provider-kind default if not set.                                                            |
 | `api_style`                   | string  | Optional. For OpenAI-based providers: `"responses"` (Responses API, default when no `base_url` is set) or `"completions"` (Chat Completions, default when `base_url` is set). |
@@ -125,40 +124,38 @@ These providers cache server-side without any markers in the request:
 
 - **OpenAI** — automatic above ~1024 tokens, 50% discount on cached input.
 - **Google Gemini 2.5+** — implicit caching, 75% discount.
-- **DeepSeek** — automatic, persistent across days, ~90% discount.
-- **xAI / Grok** — automatic, 75% discount; benefits from setting an `x-grok-conv-id` header which zerostack does not currently send.
-- **Moonshot, Groq (Kimi K2)** — automatic.
 
 For these providers, zerostack passes through to rig without additional configuration.
 
 ### Explicitly enabled by zerostack
 
-These providers require `cache_control` markers; zerostack adds them via rig's `.with_prompt_caching()`:
+Anthropic requires `cache_control` markers; zerostack adds them via rig's `.with_prompt_caching()`:
 
-- **Anthropic (direct API)** — marks system prompt, the final tool definition, and the last message. All three breakpoints contribute to cumulative savings as the conversation grows.
-- **Claude via OpenRouter** — marks the system prompt only. Anthropic's caching is prefix-based, so the tools array in front of the system block is also captured. For `anthropic/*` model IDs, zerostack also pins `provider.order = ["Anthropic"]` with `allow_fallbacks: true`, because Bedrock and Vertex AI silently drop `cache_control` markers.
+- **Anthropic** — marks system prompt, the final tool definition, and the last message. All three breakpoints contribute to cumulative savings as the conversation grows.
 
 ### Empirical impact
 
 Measured on Sonnet 4.6, second turn of a tool-heavy session (grep + read across the zerostack repo, ~6k-token system prompt including AGENTS.md and ARCHITECTURE.md):
 
-| Configuration               | turn 2 cost | reduction |
-| --------------------------- | ----------: | --------: |
-| Baseline (no caching)       |      $0.186 |         — |
-| Anthropic + caching         |      $0.024 |      -87% |
-| OpenRouter Claude + caching |      $0.026 |      -86% |
+| Configuration         | turn 2 cost | reduction |
+| --------------------- | ----------: | --------: |
+| Baseline (no caching) |      $0.186 |         — |
+| Anthropic + caching   |      $0.024 |      -87% |
 
-Projected monthly cost at 50 such turns per working day: $204 (baseline) → $26 (Anthropic direct) or $29 (OpenRouter Claude). The two cached paths are within ~$3/month of each other.
+Projected monthly cost at 50 such turns per working day: $204 (baseline) → $26 (Anthropic direct).
 
-### Known limitation: OpenRouter does not mark the last message
+### DeepSeek via custom provider
 
-As of rig 0.38, OpenRouter's `apply_prompt_caching` marks the system message only. The Anthropic provider also marks the last message, which means accumulated tool results from earlier turns continue to be cached as the conversation grows; OpenRouter does not mark this position.
+DeepSeek provides automatic caching (persistent across days, ~90% discount) and is accessible via a custom provider pointing at the DeepSeek API:
 
-On tool-heavy workloads this manifests as ~2,676 tokens running at full input rate on OpenRouter vs ~4 tokens on Anthropic direct, a gap of ~8% per turn. The bulk of savings comes from caching the system prompt and tools — both paths capture that.
+```toml
+[custom_providers.deepseek]
+provider_type = "openai"
+base_url = "https://api.deepseek.com"
+api_key_env = "DEEPSEEK_API_KEY"
+```
 
-This is an upstream rig limitation, not zerostack-specific.
-
-**Recommendation:** if you happen to have both API keys, Anthropic direct is marginally cheaper. If you don't, OpenRouter Claude with caching captures most of the savings.
+Then use it with `--provider deepseek --model deepseek-chat`.
 
 ## CLI Flags
 

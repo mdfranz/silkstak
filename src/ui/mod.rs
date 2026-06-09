@@ -335,10 +335,13 @@ pub async fn run_interactive(
     if let Some(editor) = &cfg.editor {
         input.set_editor(editor.clone());
     }
-    input.set_quick_model_names(config::quick_models_map(cfg).into_keys().collect());
+    {
+        let qm_map = config::quick_models_map(cfg);
+        input.update_quick_models_for_provider(&session.provider, &qm_map);
+    }
     {
         // fixed built-in providers plus any custom gateways from config
-        let mut providers: Vec<String> = ["anthropic", "openai", "gemini", "openrouter", "ollama"]
+        let mut providers: Vec<String> = ["anthropic", "openai", "gemini", "ollama"]
             .iter()
             .map(|s| s.to_string())
             .collect();
@@ -967,12 +970,14 @@ pub async fn run_interactive(
                                 // runs in parallel and never goes through the main
                                 // run), so it never reaches here.
                                 let result = handle_slash(&text, &mut agent, &mut client, &mut renderer, session, cli, cfg, context, &mut show_reasoning, &mut reasoning_enabled, &mut is_running, &mut input, &permission, &ask_tx, &mut todo_tools_enabled, &sandbox, #[cfg(feature = "loop")] &mut loop_state, #[cfg(feature = "mcp")] mcp_ref).await;
-                                // provider may have changed via /provider or /models — re-warm the picker's live list
+                                // provider may have changed via /provider or /models — re-warm the picker's live list and quick models
                                 {
                                     let provider = session.provider.to_string();
                                     let is_custom = cfg.custom_providers_map().contains_key(&provider);
                                     let ids = crate::ui::slash::warm_model_cache(&provider, is_custom, &client, cli, cfg).await;
                                     input.set_live_model_names(ids);
+                                    let qm_map = config::quick_models_map(cfg);
+                                    input.update_quick_models_for_provider(&provider, &qm_map);
                                 }
                                 match result {
                                 Err(e) if e.to_string().starts_with("DEFER_COMPRESS:") => {

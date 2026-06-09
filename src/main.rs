@@ -2,6 +2,7 @@ mod agent;
 mod auth;
 mod cli;
 mod config;
+mod configure;
 mod context;
 mod docs;
 mod event;
@@ -56,6 +57,59 @@ fn resolve_mode(cli: &cli::Cli, cfg: &config::Config) -> SecurityMode {
     }
 }
 
+pub fn resolve_log_file_path(env_log_file: Option<String>, env_rust_log: bool) -> Option<String> {
+    env_log_file.map(|val| {
+        if env_rust_log || val == "1" || val == "true" || val.is_empty() {
+            "zerostack.log".to_string()
+        } else {
+            val
+        }
+    })
+}
+
+fn init_logging() {
+    let filter = tracing_subscriber::EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("warn,rig=off"));
+
+    let log_file = resolve_log_file_path(
+        std::env::var("RUST_LOG_FILE").ok(),
+        std::env::var("RUST_LOG").is_ok(),
+    );
+
+    match log_file {
+        Some(path) => {
+            match std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&path)
+            {
+                Ok(file) => {
+                    tracing_subscriber::fmt()
+                        .with_writer(file)
+                        .with_env_filter(filter)
+                        .init();
+                    tracing::info!("Logging initialized (file: {})", path);
+                }
+                Err(err) => {
+                    eprintln!("Warning: failed to open log file '{}': {}. Falling back to stderr.", path, err);
+                    tracing_subscriber::fmt()
+                        .with_writer(std::io::stderr)
+                        .with_env_filter(filter)
+                        .init();
+                    tracing::warn!("Logging initialized (stderr) - log file unavailable");
+                }
+            }
+        }
+        None => {
+            tracing_subscriber::fmt()
+                .with_writer(std::io::stderr)
+                .with_env_filter(filter)
+                .init();
+            tracing::info!("Logging initialized (stderr)");
+        }
+    }
+}
+
 fn build_permission_checker(
     cli: &cli::Cli,
     cfg: &config::Config,
@@ -90,19 +144,23 @@ fn build_permission_checker(
 )]
 #[cfg_attr(not(feature = "multithread"), tokio::main(flavor = "current_thread"))]
 async fn main() -> anyhow::Result<()> {
-    tracing_subscriber::fmt()
-        .with_writer(std::io::stderr)
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("warn,rig=off")),
-        )
-        .init();
+    init_logging();
 
     let cli = cli::Cli::parse();
     let cfg = config::load();
 
     if cli.print_config {
         print_config(&cli, &cfg);
+        return Ok(());
+    }
+
+    if cli.show {
+        print_providers(&cli, &cfg);
+        return Ok(());
+    }
+
+    if cli.configure {
+        configure::run_configure(&cfg)?;
         return Ok(());
     }
 
@@ -225,7 +283,7 @@ async fn main() -> anyhow::Result<()> {
         let task_max_turns = cfg.task_max_turns.unwrap_or(20);
         let qm = config::quick_models_map(&cfg);
 
-        // Resolve subagent model: subagent_model config > subagent_provider + model > deepseek-v4-flash quick model
+        // Resolve subagent model: subagent_model config > subagent_provider + model > haiku quick model
         let (sub_provider, mut sub_model) = if let Some(sa_model) = &cfg.subagent_model {
             if let Some(q) = qm.get(sa_model.as_str()) {
                 (q.provider.clone(), q.model.clone())
@@ -238,8 +296,8 @@ async fn main() -> anyhow::Result<()> {
             }
         } else if let Some(sa_prov) = &cfg.subagent_provider {
             (sa_prov.clone(), model.clone())
-        } else if let Some(dsv4) = qm.get("deepseek-v4-pro") {
-            (dsv4.provider.clone(), dsv4.model.clone())
+        } else if let Some(haiku) = qm.get("haiku") {
+            (haiku.provider.clone(), haiku.model.clone())
         } else {
             (provider.clone(), model.clone())
         };
@@ -255,8 +313,7 @@ async fn main() -> anyhow::Result<()> {
             ) {
                 Ok(c) => c,
                 Err(e) => {
-                    // The default subagent provider can differ from the main one
-                    // (the built-in `deepseek-v4-pro` default uses OpenRouter).
+                    // The default subagent provider can differ from the main one.
                     // If its credentials are missing, don't abort the whole program:
                     // fall back to the main agent's client and model so users on a
                     // single provider (e.g. Anthropic-only) can still start.
@@ -650,6 +707,140 @@ fn print_sessions() {
         }
         println!();
         println!("Use --session <id> to load a session by its ID prefix.");
+    }
+}
+
+fn print_providers(cli: &cli::Cli, cfg: &config::Config) {
+    let config_file = config::config_file_path();
+    println!("Config file: {}", config_file.display());
+    println!();
+
+    let provider = cli.resolve_provider(cfg);
+    let model = cli.resolve_model(cfg);
+    print_section(
+        "Active",
+        &[
+            ("provider", provider.to_string()),
+            ("model", model.to_string()),
+        ],
+    );
+
+    const BUILTIN_PROVIDERS: &[(&str, &str)] = &[
+        ("anthropic", "ANTHROPIC_API_KEY"),
+        ("openai", "OPENAI_API_KEY"),
+        ("gemini", "GEMINI_API_KEY"),
+        ("ollama", "(local — no key needed)"),
+    ];
+
+    let name_w = BUILTIN_PROVIDERS
+        .iter()
+        .map(|(n, _)| n.len())
+        .max()
+        .unwrap_or(0);
+    let env_w = BUILTIN_PROVIDERS
+        .iter()
+        .map(|(_, e)| e.len())
+        .max()
+        .unwrap_or(0);
+
+    println!("Built-in providers:");
+    for &(name, env_var) in BUILTIN_PROVIDERS {
+        let status = if name == "ollama" {
+            "n/a".to_string()
+        } else {
+            let in_env = std::env::var(env_var)
+                .map(|k| !k.is_empty())
+                .unwrap_or(false);
+            let in_cfg = cfg
+                .api_keys
+                .as_ref()
+                .and_then(|m| m.get(name))
+                .map(|k| !k.is_empty())
+                .unwrap_or(false);
+            if in_env {
+                "set (env)".to_string()
+            } else if in_cfg {
+                "set (config)".to_string()
+            } else {
+                "unset".to_string()
+            }
+        };
+        println!("  {name:<name_w$}  {env_var:<env_w$}  {status}");
+    }
+    println!();
+
+    let qm = config::quick_models_map(cfg);
+    let mut names: Vec<&String> = qm.keys().collect();
+    names.sort();
+    let alias_w = names.iter().map(|n| n.len()).max().unwrap_or(0);
+    let prov_w = qm.values().map(|q| q.provider.len()).max().unwrap_or(0);
+    println!("Quick models ({}):", names.len());
+    for name in &names {
+        let q = &qm[*name];
+        let cost = if q.input_token_cost > 0.0 || q.output_token_cost > 0.0 {
+            format!(
+                "  ${:.4}/$M in  ${:.4}/$M out",
+                q.input_token_cost, q.output_token_cost
+            )
+        } else {
+            String::new()
+        };
+        println!(
+            "  {name:<alias_w$}  {prov:<prov_w$}  {model}{cost}",
+            prov = q.provider,
+            model = q.model,
+        );
+    }
+    println!();
+
+    let custom = cfg.custom_providers_map();
+    if custom.is_empty() {
+        println!("Custom providers: (none)");
+    } else {
+        let cname_w = custom.keys().map(|k| k.len()).max().unwrap_or(0);
+        println!("Custom providers ({}):", custom.len());
+        let mut cnames: Vec<&String> = custom.keys().collect();
+        cnames.sort();
+        for name in &cnames {
+            let p = &custom[*name];
+            let model_str = p.model.as_deref().unwrap_or("(from cli/config)");
+            let key_str = p.api_key_env.as_deref().unwrap_or("(default for type)");
+            println!(
+                "  {name:<cname_w$}  type={type_}  url={url}  model={model}  key_env={key}",
+                type_ = p.provider_type,
+                url = p.base_url,
+                model = model_str,
+                key = key_str,
+            );
+        }
+    }
+    println!();
+
+    #[cfg(feature = "mcp")]
+    if let Some(mcp) = &cfg.mcp_servers {
+        if mcp.is_empty() {
+            println!("MCP servers: (none)");
+        } else {
+            let mname_w = mcp.keys().map(|k| k.len()).max().unwrap_or(0);
+            println!("MCP servers ({}):", mcp.len());
+            let mut mnames: Vec<&String> = mcp.keys().collect();
+            mnames.sort();
+            for name in &mnames {
+                let srv = &mcp[*name];
+                let desc = match srv {
+                    crate::extras::mcp::config::McpServerConfig::Command {
+                        command, args, ..
+                    } => {
+                        format!("cmd: {} {}", command, args.join(" "))
+                    }
+                    crate::extras::mcp::config::McpServerConfig::Url { url, .. } => {
+                        format!("url: {}", url)
+                    }
+                };
+                println!("  {name:<mname_w$}  {desc}");
+            }
+        }
+        println!();
     }
 }
 

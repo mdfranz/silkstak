@@ -113,26 +113,6 @@ fn default_quick_models() -> HashMap<String, QuickModelConfig> {
         },
     );
 
-    // OpenRouter / DeepSeek
-    map.insert(
-        "deepseek-flash".to_string(),
-        QuickModelConfig {
-            provider: CompactString::new("openrouter"),
-            model: CompactString::new("deepseek/deepseek-v4-flash"),
-            input_token_cost: 0.0983,
-            output_token_cost: 0.1966,
-        },
-    );
-    map.insert(
-        "deepseek-pro".to_string(),
-        QuickModelConfig {
-            provider: CompactString::new("openrouter"),
-            model: CompactString::new("deepseek/deepseek-v4-pro"),
-            input_token_cost: 0.435,
-            output_token_cost: 0.87,
-        },
-    );
-
     map
 }
 
@@ -181,6 +161,59 @@ pub fn save_provider_and_model(provider: &str, model: &str) -> std::io::Result<(
         _ => std::fs::write(&path, serde_json::to_string_pretty(&cfg)?)?,
     }
     Ok(())
+}
+
+fn save_configure_data_to(
+    path: &std::path::Path,
+    api_keys: &[(String, String)],
+    active_provider: &str,
+    active_model: &str,
+) -> std::io::Result<()> {
+    let mut cfg: Config = if path.exists() {
+        let content = std::fs::read_to_string(path).unwrap_or_default();
+        match path.extension().and_then(|e| e.to_str()) {
+            Some("toml") => toml::from_str(&content).unwrap_or_default(),
+            _ => serde_json::from_str(&content).unwrap_or_default(),
+        }
+    } else {
+        Config::default()
+    };
+
+    if !api_keys.is_empty() {
+        let keys_map = cfg.api_keys.get_or_insert_with(HashMap::new);
+        for (provider, key) in api_keys {
+            keys_map.insert(provider.clone(), key.clone());
+        }
+    }
+
+    cfg.provider = Some(CompactString::new(active_provider));
+    cfg.model = Some(CompactString::new(active_model));
+
+    let parent = path.parent().ok_or_else(|| {
+        std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid config path")
+    })?;
+    std::fs::create_dir_all(parent)?;
+    match path.extension().and_then(|e| e.to_str()) {
+        Some("toml") => {
+            let content = toml::to_string(&cfg).map_err(std::io::Error::other)?;
+            std::fs::write(path, content)?;
+        }
+        _ => std::fs::write(path, serde_json::to_string_pretty(&cfg)?)?,
+    }
+    Ok(())
+}
+
+pub fn save_configure_data(
+    api_keys: &[(String, String)],
+    active_provider: &str,
+    active_model: &str,
+) -> std::io::Result<()> {
+    save_configure_data_to(
+        &resolve_config_path(),
+        api_keys,
+        active_provider,
+        active_model,
+    )
 }
 
 pub fn save_quick_model(
@@ -312,4 +345,83 @@ pub fn load() -> Config {
     }
 
     cfg
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn tmp_toml(tag: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("zs_configure_test_{tag}"));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir.join("config.toml")
+    }
+
+    #[test]
+    fn configure_creates_new_toml_with_provider_and_model() {
+        let path = tmp_toml("new");
+        let _ = std::fs::remove_file(&path);
+        save_configure_data_to(&path, &[], "anthropic", "claude-sonnet-4-6").unwrap();
+        let content = std::fs::read_to_string(&path).unwrap();
+        let cfg: Config = toml::from_str(&content).unwrap();
+        assert_eq!(cfg.provider.as_deref(), Some("anthropic"));
+        assert_eq!(cfg.model.as_deref(), Some("claude-sonnet-4-6"));
+        assert!(cfg.api_keys.is_none());
+    }
+
+    #[test]
+    fn configure_saves_api_keys_into_map() {
+        let path = tmp_toml("apikeys");
+        let _ = std::fs::remove_file(&path);
+        let keys = vec![
+            ("anthropic".to_string(), "sk-ant-test".to_string()),
+            ("openai".to_string(), "sk-openai-test".to_string()),
+        ];
+        save_configure_data_to(&path, &keys, "anthropic", "claude-sonnet-4-6").unwrap();
+        let content = std::fs::read_to_string(&path).unwrap();
+        let cfg: Config = toml::from_str(&content).unwrap();
+        let api_keys = cfg.api_keys.unwrap();
+        assert_eq!(
+            api_keys.get("anthropic").map(|s| s.as_str()),
+            Some("sk-ant-test")
+        );
+        assert_eq!(
+            api_keys.get("openai").map(|s| s.as_str()),
+            Some("sk-openai-test")
+        );
+    }
+
+    #[test]
+    fn configure_merges_into_existing_config() {
+        let path = tmp_toml("merge");
+        let _ = std::fs::remove_file(&path);
+        let existing = Config {
+            max_tokens: Some(8192),
+            ..Default::default()
+        };
+        std::fs::write(&path, toml::to_string(&existing).unwrap()).unwrap();
+        save_configure_data_to(&path, &[], "openai", "gpt-4o").unwrap();
+        let content = std::fs::read_to_string(&path).unwrap();
+        let cfg: Config = toml::from_str(&content).unwrap();
+        assert_eq!(cfg.max_tokens, Some(8192));
+        assert_eq!(cfg.provider.as_deref(), Some("openai"));
+        assert_eq!(cfg.model.as_deref(), Some("gpt-4o"));
+    }
+
+    #[test]
+    fn configure_overwrites_existing_api_key() {
+        let path = tmp_toml("overwrite_key");
+        let _ = std::fs::remove_file(&path);
+        let keys1 = vec![("anthropic".to_string(), "old-key".to_string())];
+        save_configure_data_to(&path, &keys1, "anthropic", "claude-haiku-4-5").unwrap();
+        let keys2 = vec![("anthropic".to_string(), "new-key".to_string())];
+        save_configure_data_to(&path, &keys2, "anthropic", "claude-haiku-4-5").unwrap();
+        let content = std::fs::read_to_string(&path).unwrap();
+        let cfg: Config = toml::from_str(&content).unwrap();
+        let api_keys = cfg.api_keys.unwrap();
+        assert_eq!(
+            api_keys.get("anthropic").map(|s| s.as_str()),
+            Some("new-key")
+        );
+    }
 }
