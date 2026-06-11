@@ -37,6 +37,19 @@ _zerostack_ is one of the smallest and most performant coding agents on the mark
 - RAM footprint: ~16MB on average, with peaks at ~24MB (vs ~300MB with peaks at ~700MB for opencode or other JS-based coding agents)
 - CPU usage: 0.0% on idle, ~1.5% when using tools (measured on an Intel i5 7th gen, vs ~2% on idle and ~20% when working for opencode)
 
+## Building and Installation
+
+A `Makefile` is provided for common development and installation tasks:
+
+- **Build Release**: `make` or `make build`
+- **Build with All Features**: `make build-all` (includes `memory` and `acp`)
+- **Local Development**: `make dev` (fast unoptimized build)
+- **Run Tests**: `make test` (formats and runs unit tests)
+- **Type Check**: `make check` (fast type checking without compiling)
+- **Linter & Formatting**: `make fmt` (runs `rustfmt` and `clippy`)
+- **Install**: `make install` (builds with all features and copies binary to `~/.local/bin/zerostack`)
+- **Uninstall**: `make uninstall`
+- **Debug**: `make debug` (runs with debug logs to `zerostack.log`)
 
 ### Optional: sandbox mode
 
@@ -50,10 +63,6 @@ apt install bubblewrap
 
 # Fedora
 dnf install bubblewrap
-
-# Arch
-pacman -S bubblewrap
-```
 
 There is also support for zerobox as an alternative sandbox backend.
 

@@ -24,7 +24,7 @@ use crate::ui::events::render_session;
 use crate::ui::input::InputEditor;
 use crate::ui::renderer::Renderer;
 
-pub(crate) const C_AGENT: crossterm::style::Color = crossterm::style::Color::White;
+pub(crate) const C_AGENT: crossterm::style::Color = crossterm::style::Color::Reset;
 pub(crate) const C_RESULT: crossterm::style::Color = crossterm::style::Color::DarkGrey;
 pub(crate) const C_ERROR: crossterm::style::Color = crossterm::style::Color::Red;
 

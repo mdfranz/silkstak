@@ -145,9 +145,16 @@ pub async fn handle_agent_event(
 
             let max_width = renderer.line_width();
             let mut styled = crate::ui::markdown::markdown_to_styled(response_buf, max_width);
+            let text_color = renderer.text_color();
 
             if !styled.is_empty() {
                 styled[0].text = CompactString::from(format!("< {}", styled[0].text));
+            }
+
+            for entry in &mut styled {
+                if entry.color == Color::White {
+                    entry.color = text_color;
+                }
             }
 
             if let Some(start) = *response_start_line {

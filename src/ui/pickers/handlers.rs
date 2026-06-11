@@ -111,9 +111,10 @@ pub fn handle_file_key(
 pub struct CommandPickerCtx<'a> {
     pub prompt_names: &'a [String],
     pub theme_names: &'a [String],
-    pub quick_model_names: &'a [String],
+    pub quick_model_names: &'a [(String, String)],
     pub live_model_names: &'a [String],
     pub provider_names: &'a [String],
+    pub current_provider: &'a str,
 }
 
 pub fn handle_command_key(
@@ -243,6 +244,7 @@ pub fn handle_command_key(
                     mp.set_groups(
                         ctx.quick_model_names.to_vec(),
                         ctx.live_model_names.to_vec(),
+                        ctx.current_provider.to_string(),
                     );
                     mp.activate();
                     return (true, Some(Picker::Models(mp)));
@@ -491,11 +493,20 @@ pub fn handle_models_key(
                 true
             }
         }
-        KeyCode::Tab | KeyCode::BackTab => {
+        KeyCode::Tab => {
+            picker.select_next();
+            true
+        }
+        KeyCode::BackTab => {
+            picker.select_prev();
+            true
+        }
+        KeyCode::Left | KeyCode::Right => {
             picker.toggle_group();
             true
         }
         KeyCode::Up => {
+
             picker.select_prev();
             true
         }

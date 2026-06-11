@@ -78,7 +78,7 @@ impl Renderer {
             chat_bg: None,
             input_bg: None,
             status_bg: None,
-            text_color: Color::White,
+            text_color: Color::Reset,
             user_color: Color::Green,
             status_color: Color::Grey,
             cursor_style: Some(SetCursorStyle::SteadyBar),
@@ -106,6 +106,20 @@ impl Renderer {
         self.chat_bg = chat_bg;
         self.input_bg = input_bg;
         self.status_bg = status_bg;
+        if self.text_color == Color::Reset
+            && let Some(bg) = input_bg.or(chat_bg).or(status_bg)
+        {
+            self.text_color = contrasting_text_color(bg);
+        }
+    }
+
+    pub fn reset_colors(&mut self) {
+        self.chat_bg = None;
+        self.input_bg = None;
+        self.status_bg = None;
+        self.text_color = Color::Reset;
+        self.user_color = Color::Green;
+        self.status_color = Color::Grey;
     }
 
     pub fn set_text_color(&mut self, c: Color) {
@@ -129,6 +143,11 @@ impl Renderer {
     }
 
     fn color(&self, color: Color) -> Color {
+        let color = if color == Color::Reset && self.text_color != Color::Reset {
+            self.text_color
+        } else {
+            color
+        };
         resolve_color(color, self.monochrome)
     }
 
@@ -413,8 +432,11 @@ impl Renderer {
 
         if let Some(ref header) = self.header {
             stdout.execute(MoveTo(0, 0))?;
-            let color = self.color(Color::Blue);
-            write!(stdout, "{}", SetBackgroundColor(color))?;
+            if let Some(bg) = self.status_bg {
+                write!(stdout, "{}", SetBackgroundColor(self.color(bg)))?;
+            } else {
+                write!(stdout, "{}", SetBackgroundColor(self.color(Color::Blue)))?;
+            }
             write!(stdout, "{}", SetForegroundColor(self.color(header.color)))?;
             let truncated: String = header.text.chars().take(cols as usize).collect();
             write!(stdout, "{}", truncated)?;
@@ -442,7 +464,7 @@ impl Renderer {
                 0
             }) as u16;
 
-        while (visual_row as u16) < limit && buf_idx < total {
+        while visual_row < limit && buf_idx < total {
             let entry = &self.buffer[buf_idx];
             let text = &entry.text;
 
@@ -495,6 +517,7 @@ impl Renderer {
 
         while visual_row < limit {
             stdout.execute(MoveTo(0, visual_row))?;
+            write!(stdout, "{}", ResetColor)?;
             if let Some(bg) = self.chat_bg {
                 write!(stdout, "{}", SetBackgroundColor(self.color(bg)))?;
             }
@@ -831,7 +854,7 @@ impl Renderer {
             if i == first_visible {
                 write!(stdout, "{}", SetForegroundColor(self.color(Color::Cyan)))?;
                 write!(stdout, "{}", prompt)?;
-                write!(stdout, "{}", SetForegroundColor(Color::Reset))?;
+                write!(stdout, "{}", SetForegroundColor(self.color(Color::Reset)))?;
             } else {
                 write!(stdout, "{}", " ".repeat(prompt_width))?;
             }
@@ -858,6 +881,7 @@ impl Renderer {
                 .skip(skip_chars)
                 .take(visible_width)
                 .collect();
+            write!(stdout, "{}", SetForegroundColor(self.color(Color::Reset)))?;
             write!(stdout, "{}", display)?;
             write!(stdout, "{}", Clear(ClearType::UntilNewLine))?;
             write!(stdout, "{}", ResetColor)?;
@@ -901,6 +925,41 @@ impl Renderer {
         }
         stdout.flush()?;
         Ok(())
+    }
+}
+
+pub(crate) fn contrasting_text_color(bg: Color) -> Color {
+    let luminance = match bg {
+        Color::Rgb { r, g, b } => {
+            (u32::from(r) * 299 + u32::from(g) * 587 + u32::from(b) * 114) / 1000
+        }
+        Color::Black => 0,
+        Color::DarkGrey => 64,
+        Color::DarkRed
+        | Color::DarkGreen
+        | Color::DarkYellow
+        | Color::DarkBlue
+        | Color::DarkMagenta
+        | Color::DarkCyan => 96,
+        Color::Red | Color::Green | Color::Yellow | Color::Blue | Color::Magenta | Color::Cyan => {
+            160
+        }
+        Color::Grey => 192,
+        Color::White => 255,
+        Color::AnsiValue(n) if n < 16 => {
+            const TABLE: [u32; 16] = [
+                0, 128, 128, 128, 128, 128, 128, 192, 128, 255, 255, 255, 255, 255, 255, 255,
+            ];
+            TABLE[n as usize]
+        }
+        Color::AnsiValue(_) => 128,
+        Color::Reset => return Color::Reset,
+    };
+
+    if luminance >= 128 {
+        Color::Black
+    } else {
+        Color::White
     }
 }
 

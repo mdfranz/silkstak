@@ -544,6 +544,7 @@ impl Tool for EditTool {
 
     async fn call(&self, args: EditArgs) -> Result<String, ToolError> {
         let path = crate::fs::expand_tilde(&args.path);
+        tracing::info!(path = %path, "executing edit tool");
         let coaching = check_perm_path(&self.permission, &self.ask_tx, "edit", &path).await?;
 
         let bytes = tokio::fs::read(&path).await?;

@@ -125,6 +125,7 @@ impl Tool for BashTool {
     }
 
     async fn call(&self, args: BashArgs) -> Result<String, ToolError> {
+        tracing::info!(command = %args.command, "executing bash tool");
         let mut coaching: Option<String> = None;
         for cmd in split_bash_commands(&args.command) {
             if let Some(msg) = check_perm(&self.permission, &self.ask_tx, "bash", &cmd).await? {

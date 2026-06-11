@@ -6,8 +6,10 @@ pub struct ModelsPicker {
     pub cursor: usize,
     pub matches: Vec<String>,
     pub selected: usize,
-    quick: Vec<String>,
+    quick: Vec<(String, String)>,
     provider: Vec<String>,
+    provider_name: String,
+    match_descriptions: Vec<Option<String>>,
     pub group: usize,
     monochrome: bool,
 }
@@ -22,6 +24,8 @@ impl ModelsPicker {
             selected: 0,
             quick: Vec::new(),
             provider: Vec::new(),
+            provider_name: String::new(),
+            match_descriptions: Vec::new(),
             group: 0,
             monochrome: false,
         }
@@ -31,9 +35,15 @@ impl ModelsPicker {
         self.monochrome = monochrome;
     }
 
-    pub fn set_groups(&mut self, quick: Vec<String>, provider: Vec<String>) {
+    pub fn set_groups(
+        &mut self,
+        quick: Vec<(String, String)>,
+        provider: Vec<String>,
+        provider_name: String,
+    ) {
         self.quick = quick;
         self.provider = provider;
+        self.provider_name = provider_name;
     }
 
     pub fn activate(&mut self) {
@@ -87,21 +97,39 @@ impl ModelsPicker {
     }
 
     fn filter(&mut self) {
-        let src = if self.group == 0 {
-            &self.quick
+        if self.group == 0 {
+            let mut scored: Vec<(i32, &String, &String)> = self
+                .quick
+                .iter()
+                .filter_map(|(name, model)| {
+                    fuzzy_score(name, &self.query).map(|s| (s, name, model))
+                })
+                .collect();
+            scored.sort_by_key(|b| std::cmp::Reverse(b.0));
+            self.matches = scored
+                .iter()
+                .take(50)
+                .map(|(_, n, _)| (*n).clone())
+                .collect();
+            self.match_descriptions = scored
+                .iter()
+                .take(50)
+                .map(|(_, _, m)| Some((*m).clone()))
+                .collect();
         } else {
-            &self.provider
-        };
-        let mut scored: Vec<(i32, &String)> = src
-            .iter()
-            .filter_map(|n| fuzzy_score(n, &self.query).map(|s| (s, n)))
-            .collect();
-        scored.sort_by(|a, b| b.0.cmp(&a.0));
-        self.matches = scored
-            .into_iter()
-            .take(50)
-            .map(|(_, n)| n.clone())
-            .collect();
+            let mut scored: Vec<(i32, &String)> = self
+                .provider
+                .iter()
+                .filter_map(|n| fuzzy_score(n, &self.query).map(|s| (s, n)))
+                .collect();
+            scored.sort_by_key(|b| std::cmp::Reverse(b.0));
+            self.matches = scored
+                .iter()
+                .take(50)
+                .map(|(_, n)| (*n).clone())
+                .collect();
+            self.match_descriptions = vec![None; self.matches.len()];
+        }
         self.selected = 0;
     }
 
@@ -126,17 +154,28 @@ impl ModelsPicker {
     }
 
     pub fn header_text(&self) -> String {
-        let tab = |label: &str, count: usize, active: bool| {
-            if active {
-                format!("[{} {}]", label, count)
+        let label_quick = if self.group == 0 {
+            format!("▶ Aliases ({})", self.quick.len())
+        } else {
+            format!("  Aliases ({})", self.quick.len())
+        };
+
+        let label_provider = {
+            let name = if self.provider_name.is_empty() {
+                "Provider".to_string()
             } else {
-                format!(" {} {} ", label, count)
+                format!("{} Models", self.provider_name)
+            };
+            if self.group == 1 {
+                format!("▶ All {} ({})", name, self.provider.len())
+            } else {
+                format!("  All {} ({})", name, self.provider.len())
             }
         };
+
         format!(
-            "{}  {}   (Tab to switch · /models refresh for the latest)",
-            tab("Quick", self.quick.len(), self.group == 0),
-            tab("Provider", self.provider.len(), self.group == 1)
+            "{}   {}    (Left/Right to switch · Tab to cycle)",
+            label_quick, label_provider
         )
     }
 
@@ -144,6 +183,13 @@ impl ModelsPicker {
         if !self.active {
             return Ok(());
         }
-        draw_picker_list(&self.matches, self.selected, self.monochrome, None, 5, &[])
+        draw_picker_list(
+            &self.matches,
+            self.selected,
+            self.monochrome,
+            None,
+            5,
+            &self.match_descriptions,
+        )
     }
 }

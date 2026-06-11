@@ -200,6 +200,7 @@ pub async fn check_perm(
     tool: &str,
     input_key: &str,
 ) -> Result<Option<String>, ToolError> {
+    tracing::debug!(tool = tool, input = input_key, "checking permission");
     let Some(perm) = permission else {
         return Ok(None);
     };
@@ -231,6 +232,7 @@ pub async fn check_perm_path(
     tool: &str,
     path: &str,
 ) -> Result<Option<String>, ToolError> {
+    tracing::debug!(tool = tool, path = path, "checking permission for path");
     let Some(perm) = permission else {
         return Ok(None);
     };

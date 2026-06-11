@@ -130,10 +130,10 @@ pub fn save_provider_and_model(provider: &str, model: &str) -> std::io::Result<(
 
     // If this is a known custom provider, also update its model field so that
     // default_model_for_provider will return the right value on the next start.
-    if let Some(ref mut providers) = cfg.custom_providers {
-        if let Some(entry) = providers.get_mut(provider) {
-            entry.model = Some(CompactString::new(model));
-        }
+    if let Some(ref mut providers) = cfg.custom_providers
+        && let Some(entry) = providers.get_mut(provider)
+    {
+        entry.model = Some(CompactString::new(model));
     }
 
     let parent = path.parent().ok_or_else(|| {
@@ -239,25 +239,26 @@ pub fn save_quick_model(name: &str, provider: &str, model: &str) -> std::io::Res
 }
 
 fn rich_default_config() -> Config {
-    let mut cfg = Config::default();
-    cfg.quick_models = Some(default_quick_models());
-    cfg.provider = Some(CompactString::new("auto"));
-    cfg.max_tokens = Some(16384);
-    cfg.context_window = Some(128_000);
-    cfg.compact_enabled = Some(true);
-    cfg.max_text_file_size = Some(1_048_576);
-    cfg.edit_system = Some(EditSystem::Similarity);
-    cfg.default_permission_mode = Some("standard".to_string());
-    cfg.default_prompt = Some(CompactString::new("code"));
-    cfg.show_tool_details = Some(ShowToolDetails::Lines(1));
-    cfg.subagent_model = Some(CompactString::new("haiku"));
-    #[cfg(feature = "subagents")]
-    {
-        cfg.subagent_max_read_lines = Some(2000);
-        cfg.subagent_max_grep_results = Some(200);
-        cfg.subagent_max_find_results = Some(200);
+    Config {
+        quick_models: Some(default_quick_models()),
+        provider: Some(CompactString::new("auto")),
+        max_tokens: Some(16384),
+        context_window: Some(128_000),
+        compact_enabled: Some(true),
+        max_text_file_size: Some(1_048_576),
+        edit_system: Some(EditSystem::Similarity),
+        default_permission_mode: Some("standard".to_string()),
+        default_prompt: Some(CompactString::new("code")),
+        show_tool_details: Some(ShowToolDetails::Lines(1)),
+        subagent_model: Some(CompactString::new("haiku")),
+        #[cfg(feature = "subagents")]
+        subagent_max_read_lines: Some(2000),
+        #[cfg(feature = "subagents")]
+        subagent_max_grep_results: Some(200),
+        #[cfg(feature = "subagents")]
+        subagent_max_find_results: Some(200),
+        ..Default::default()
     }
-    cfg
 }
 
 pub fn load() -> Config {

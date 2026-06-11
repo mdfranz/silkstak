@@ -4,20 +4,25 @@ use crate::provider::{AnyAgent, AnyModel, OpenAiAgent, OpenAiModel};
 use rig::agent::{Agent, AgentBuilder};
 use rig::completion::CompletionModel;
 
+pub struct BuilderArgs<'a> {
+    pub max_turns: usize,
+    pub max_text_file_size: u64,
+    pub max_read_lines: u64,
+    pub max_grep_results: u64,
+    pub max_find_results: u64,
+    pub max_list_dir_entries: Option<u64>,
+    #[cfg(feature = "archmd")]
+    pub architecture: Option<&'a str>,
+}
+
 fn build_explore_agent_inner<M: CompletionModel + 'static>(
     model: M,
-    max_turns: usize,
-    max_text_file_size: u64,
-    max_read_lines: u64,
-    max_grep_results: u64,
-    max_find_results: u64,
-    max_list_dir_entries: Option<u64>,
-    #[cfg(feature = "archmd")] architecture: Option<&str>,
+    args: BuilderArgs,
 ) -> Agent<M> {
     let mut preamble = prompt::explore_prompt();
 
     #[cfg(feature = "archmd")]
-    if let Some(arch) = architecture
+    if let Some(arch) = args.architecture
         && !arch.is_empty()
     {
         preamble.push_str("\n\n");
@@ -28,12 +33,16 @@ fn build_explore_agent_inner<M: CompletionModel + 'static>(
         Box::new(tools::ReadTool::new(
             None,
             None,
-            Some(max_text_file_size),
-            max_read_lines,
+            Some(args.max_text_file_size),
+            args.max_read_lines,
         )),
-        Box::new(tools::GrepTool::new(None, None, max_grep_results)),
-        Box::new(tools::FindFilesTool::new(None, None, max_find_results)),
-        Box::new(tools::ListDirTool::new(None, None, max_list_dir_entries)),
+        Box::new(tools::GrepTool::new(None, None, args.max_grep_results)),
+        Box::new(tools::FindFilesTool::new(None, None, args.max_find_results)),
+        Box::new(tools::ListDirTool::new(
+            None,
+            None,
+            args.max_list_dir_entries,
+        )),
         #[cfg(feature = "memory")]
         Box::new(crate::extras::memory::MemoryRead::new(None, None)),
         #[cfg(feature = "memory")]
@@ -42,7 +51,7 @@ fn build_explore_agent_inner<M: CompletionModel + 'static>(
 
     AgentBuilder::new(model)
         .preamble(&preamble)
-        .default_max_turns(max_turns)
+        .default_max_turns(args.max_turns)
         .tools(tools)
         .build()
 }
@@ -53,70 +62,26 @@ pub(crate) async fn build_explore_agent(
     cfg: &crate::config::Config,
     #[cfg(feature = "archmd")] architecture: Option<String>,
 ) -> AnyAgent {
-    let max_text_file_size = cfg.max_text_file_size.unwrap_or(10 * 1024 * 1024);
-    let max_read_lines = cfg.resolve_subagent_max_read_lines();
-    let max_grep_results = cfg.resolve_subagent_max_grep_results();
-    let max_find_results = cfg.resolve_subagent_max_find_results();
-    let max_list_dir_entries = cfg.resolve_subagent_max_list_dir_entries();
-    #[cfg(feature = "archmd")]
-    let arch_ref = architecture.as_deref();
+    let args = BuilderArgs {
+        max_turns,
+        max_text_file_size: cfg.max_text_file_size.unwrap_or(10 * 1024 * 1024),
+        max_read_lines: cfg.resolve_subagent_max_read_lines(),
+        max_grep_results: cfg.resolve_subagent_max_grep_results(),
+        max_find_results: cfg.resolve_subagent_max_find_results(),
+        max_list_dir_entries: cfg.resolve_subagent_max_list_dir_entries(),
+        #[cfg(feature = "archmd")]
+        architecture: architecture.as_deref(),
+    };
+
     match model {
         AnyModel::OpenAI(m) => AnyAgent::OpenAI(match m {
-            OpenAiModel::Responses(m) => OpenAiAgent::Responses(build_explore_agent_inner(
-                m,
-                max_turns,
-                max_text_file_size,
-                max_read_lines,
-                max_grep_results,
-                max_find_results,
-                max_list_dir_entries,
-                #[cfg(feature = "archmd")]
-                arch_ref,
-            )),
-            OpenAiModel::Completions(m) => OpenAiAgent::Completions(build_explore_agent_inner(
-                m,
-                max_turns,
-                max_text_file_size,
-                max_read_lines,
-                max_grep_results,
-                max_find_results,
-                max_list_dir_entries,
-                #[cfg(feature = "archmd")]
-                arch_ref,
-            )),
+            OpenAiModel::Responses(m) => OpenAiAgent::Responses(build_explore_agent_inner(m, args)),
+            OpenAiModel::Completions(m) => {
+                OpenAiAgent::Completions(build_explore_agent_inner(m, args))
+            }
         }),
-        AnyModel::Anthropic(m) => AnyAgent::Anthropic(build_explore_agent_inner(
-            m,
-            max_turns,
-            max_text_file_size,
-            max_read_lines,
-            max_grep_results,
-            max_find_results,
-            max_list_dir_entries,
-            #[cfg(feature = "archmd")]
-            arch_ref,
-        )),
-        AnyModel::Gemini(m) => AnyAgent::Gemini(build_explore_agent_inner(
-            m,
-            max_turns,
-            max_text_file_size,
-            max_read_lines,
-            max_grep_results,
-            max_find_results,
-            max_list_dir_entries,
-            #[cfg(feature = "archmd")]
-            arch_ref,
-        )),
-        AnyModel::Ollama(m) => AnyAgent::Ollama(build_explore_agent_inner(
-            m,
-            max_turns,
-            max_text_file_size,
-            max_read_lines,
-            max_grep_results,
-            max_find_results,
-            max_list_dir_entries,
-            #[cfg(feature = "archmd")]
-            arch_ref,
-        )),
+        AnyModel::Anthropic(m) => AnyAgent::Anthropic(build_explore_agent_inner(m, args)),
+        AnyModel::Gemini(m) => AnyAgent::Gemini(build_explore_agent_inner(m, args)),
+        AnyModel::Ollama(m) => AnyAgent::Ollama(build_explore_agent_inner(m, args)),
     }
 }

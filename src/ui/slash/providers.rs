@@ -238,26 +238,31 @@ async fn handle_models(parts: &[&str], ctx: &mut SlashCtx<'_>) -> anyhow::Result
     // Default listing: current model, then quick models for this provider.
     write_ok(
         ctx.renderer,
-        format!("model: {}  [{}]", ctx.session.model, provider),
+        format!("current model: {}  [{}]", ctx.session.model, provider),
     );
 
     let mut sorted: Vec<&String> = qm.keys().collect();
     sorted.sort();
     let provider_qm: Vec<(&String, &QuickModelConfig)> = if show_all {
+        write_result(ctx.renderer, "all quick aliases:".to_string());
         sorted.iter().map(|n| (*n, &qm[*n])).collect()
     } else {
-        sorted
+        let list: Vec<(&String, &QuickModelConfig)> = sorted
             .iter()
             .filter(|n| qm[**n].provider.as_str() == provider)
             .map(|n| (*n, &qm[*n]))
-            .collect()
+            .collect();
+        if !list.is_empty() {
+            write_result(ctx.renderer, "quick aliases:".to_string());
+        }
+        list
     };
 
     if provider_qm.is_empty() && !show_all {
         write_result(
             ctx.renderer,
             format!(
-                "  no quick models for {} — /models all or /models-add <name> {} <model>",
+                "  no quick aliases for {} — /models all or /models-add <name> {} <model>",
                 provider, provider
             ),
         );
@@ -287,7 +292,7 @@ async fn handle_models(parts: &[&str], ctx: &mut SlashCtx<'_>) -> anyhow::Result
         write_result(
             ctx.renderer,
             format!(
-                "  {} available — use picker (Tab) or /models list",
+                "  {} total models — type '/models ' to open the picker (Left/Right to switch tabs)",
                 available_count
             ),
         );

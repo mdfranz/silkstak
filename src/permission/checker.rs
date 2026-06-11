@@ -246,9 +246,9 @@ impl PermissionChecker {
                 }
             }),
             SecurityMode::PlanWrite => base.unwrap_or_else(|| {
-                if self.is_read_tool(tool) {
-                    Action::Allow
-                } else if matches!(tool, "write" | "edit") && is_plan_file(abs_path) {
+                if self.is_read_tool(tool)
+                    || (matches!(tool, "write" | "edit") && is_plan_file(abs_path))
+                {
                     Action::Allow
                 } else {
                     Action::Deny

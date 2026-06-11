@@ -120,6 +120,7 @@ async fn handle_theme(parts: &[&str], ctx: &mut SlashCtx<'_>) -> anyhow::Result<
         } else {
             ctx.context.current_theme_name = None;
             let _ = storage::save_theme_name(None);
+            ctx.renderer.reset_colors();
             if let Some(colors) = &ctx.cfg.colors {
                 let chat_bg = colors
                     .chat_background

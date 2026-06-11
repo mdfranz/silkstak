@@ -112,16 +112,19 @@ fn quick_models_filtered_to_current_provider() {
 
     editor.update_quick_models_for_provider("anthropic", &qm);
     let mut names = editor.quick_model_names().to_vec();
-    names.sort();
-    assert_eq!(names, vec!["haiku", "sonnet"]);
+    names.sort_by(|a, b| a.0.cmp(&b.0));
+    let aliases: Vec<String> = names.iter().map(|(n, _)| n.clone()).collect();
+    assert_eq!(aliases, vec!["haiku", "sonnet"]);
 
     editor.update_quick_models_for_provider("openai", &qm);
-    let names = editor.quick_model_names().to_vec();
-    assert_eq!(names, vec!["gpt"]);
+    let names = editor.quick_model_names();
+    let aliases: Vec<String> = names.iter().map(|(n, _)| n.clone()).collect();
+    assert_eq!(aliases, vec!["gpt"]);
 
     editor.update_quick_models_for_provider("gemini", &qm);
-    let names = editor.quick_model_names().to_vec();
-    assert_eq!(names, vec!["gemini-pro"]);
+    let names = editor.quick_model_names();
+    let aliases: Vec<String> = names.iter().map(|(n, _)| n.clone()).collect();
+    assert_eq!(aliases, vec!["gemini-pro"]);
 }
 
 #[test]

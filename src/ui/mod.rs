@@ -69,7 +69,7 @@ pub(crate) fn apply_current_prompt_mode(
     }
 }
 
-pub(super) const C_AGENT: Color = Color::White;
+pub(super) const C_AGENT: Color = Color::Reset;
 pub(super) const C_ERROR: Color = Color::Red;
 pub(super) const C_TOOL: Color = Color::Yellow;
 pub(super) const C_PERM: Color = Color::Magenta;
@@ -99,16 +99,15 @@ fn refresh_display(
         renderer.show_cursor = true;
     }
     renderer.render_viewport()?;
-    let status = StatusLine::render(
+    let status = StatusLine::render(crate::ui::status::RenderArgs {
         session,
         is_running,
-        0,
         loop_label,
         prompt_name,
         perm_mode,
         btw_in,
         btw_out,
-    );
+    });
     renderer.draw_bottom(&input.buffer, input.cursor, &status, is_running)?;
     if let Some(ref mut picker) = input.picker {
         picker.draw()?;
@@ -585,13 +584,13 @@ pub async fn run_interactive(
                         continue;
                     }
                     UserEvent::MouseDrag { row, col } => {
-                        if let Some(anchor) = renderer.selection_anchor.clone() {
-                            if let Some(pos) = renderer.buffer_pos_at_row_col(row, col) {
-                                renderer.selection_active = true;
-                                renderer.selection_start = Some(anchor);
-                                renderer.selection_end = Some(pos);
-                                refresh_display(&mut renderer, &mut input, session, is_running, loop_label.as_deref(), context.current_prompt_name.as_deref(), perm_mode().as_deref(), btw_total_in, btw_total_out)?;
-                            }
+                        if let Some(anchor) = renderer.selection_anchor.clone()
+                            && let Some(pos) = renderer.buffer_pos_at_row_col(row, col)
+                        {
+                            renderer.selection_active = true;
+                            renderer.selection_start = Some(anchor);
+                            renderer.selection_end = Some(pos);
+                            refresh_display(&mut renderer, &mut input, session, is_running, loop_label.as_deref(), context.current_prompt_name.as_deref(), perm_mode().as_deref(), btw_total_in, btw_total_out)?;
                         }
                         continue;
                     }
@@ -655,18 +654,27 @@ pub async fn run_interactive(
                                 if !input.buffer.is_empty() {
                                     input.clear_buffer();
                                 }
-                                if let Some(restore_name) = dot_prompt_restore.take() {
-                                    context.current_prompt = context.prompts.get(&restore_name).cloned();
-                                    context.current_prompt_name = if context.current_prompt.is_some() {
-                                        Some(restore_name)
-                                    } else {
-                                        None
-                                    };
-                                    if let Some(perm) = &permission {
-                                        let mut guard = perm.lock().unwrap_or_else(|e| e.into_inner());
-                                        guard.restore_user_mode();
-                                    }
-                                }
+                if let Some(restore_name) = dot_prompt_restore.take()
+                    && let Some(content) = context.prompts.get(&restore_name).cloned()
+                {
+                    let cloned_content = content.clone();
+                    let (mode_directive_str, clean_content) = crate::permission::parse_prompt_mode(&cloned_content);
+                    context.current_prompt = Some(if mode_directive_str.is_some() {
+                        clean_content.to_string()
+                    } else {
+                        content
+                    });
+                    context.current_prompt_name = Some(restore_name);
+                    if let Some(mode_str) = mode_directive_str
+                        && let Some(perm) = &permission {
+                            let mut guard = perm.lock().unwrap_or_else(|e| e.into_inner());
+                            if mode_str == "last_user_mode" {
+                                guard.restore_user_mode();
+                            } else if let Some(mode) = crate::permission::SecurityMode::from_str(mode_str) {
+                                guard.set_prompt_mode(mode);
+                            }
+                        }
+                }
                                 renderer.write_line(
                                     "interrupted (changes may be partial; review with git diff)",
                                     C_ERROR,
@@ -979,11 +987,12 @@ pub async fn run_interactive(
                                 }
                             }
                             if !is_dot_cmd {
-                            if text.starts_with('/') {
-                                for line in text.lines() {
-                                    let safe_line = sanitize_output(line);
-                                    renderer.write_line(&format!("> {}", safe_line), Color::Green)?;
-                                }
+                                let trimmed = text.trim_start();
+                                if trimmed.starts_with('/') {
+                                    for line in text.lines() {
+                                        let safe_line = sanitize_output(line);
+                                        renderer.write_line(&format!("> {}", safe_line), Color::Green)?;
+                                    }
                                 renderer.write_line("", Color::White)?;
                                 renderer.write_line("", Color::White)?;
                                 #[cfg(feature = "mcp")]
@@ -1275,8 +1284,6 @@ pub async fn run_interactive(
                                 ).await;
                             }
                             }
-                            refresh_display(&mut renderer, &mut input, session, is_running, loop_label.as_deref(), context.current_prompt_name.as_deref(), perm_mode().as_deref(), btw_total_in, btw_total_out)?;
-                        } else if is_running {
                             refresh_display(&mut renderer, &mut input, session, is_running, loop_label.as_deref(), context.current_prompt_name.as_deref(), perm_mode().as_deref(), btw_total_in, btw_total_out)?;
                         } else {
                             refresh_display(&mut renderer, &mut input, session, is_running, loop_label.as_deref(), context.current_prompt_name.as_deref(), perm_mode().as_deref(), btw_total_in, btw_total_out)?;

@@ -27,9 +27,10 @@ pub struct InputEditor {
     monochrome: bool,
     prompt_names: Vec<String>,
     theme_names: Vec<String>,
-    quick_model_names: Vec<String>,
+    quick_model_names: Vec<(String, String)>,
     live_model_names: Vec<String>,
     provider_names: Vec<String>,
+    pub current_provider: String,
     editor: Option<String>,
     kill_ring: Vec<CompactString>,
     yank_pos: Option<usize>,
@@ -51,6 +52,7 @@ impl InputEditor {
             quick_model_names: Vec::new(),
             live_model_names: Vec::new(),
             provider_names: Vec::new(),
+            current_provider: String::new(),
             editor: None,
             kill_ring: Vec::with_capacity(MAX_KILL_RING),
             yank_pos: None,
@@ -74,17 +76,23 @@ impl InputEditor {
         provider: &str,
         qm: &std::collections::HashMap<String, crate::config::QuickModelConfig>,
     ) {
-        let mut names: Vec<String> = qm
+        self.current_provider = provider.to_string();
+        let mut names: Vec<(String, String)> = qm
             .iter()
             .filter(|(_, v)| v.provider.as_str() == provider)
-            .map(|(k, _)| k.clone())
+            .map(|(k, v)| (k.clone(), v.model.to_string()))
             .collect();
-        names.sort();
+        names.sort_by(|a, b| a.0.cmp(&b.0));
         self.quick_model_names = names;
     }
 
     pub fn set_live_model_names(&mut self, names: Vec<String>) {
         self.live_model_names = names;
+    }
+
+    #[cfg(test)]
+    pub fn quick_model_names(&self) -> &[(String, String)] {
+        &self.quick_model_names
     }
 
     pub fn set_provider_names(&mut self, names: Vec<String>) {
@@ -140,6 +148,7 @@ impl InputEditor {
         picker.set_groups(
             self.quick_model_names.clone(),
             self.live_model_names.clone(),
+            self.current_provider.clone(),
         );
         picker.activate();
         self.picker = Some(Picker::Models(picker));
@@ -454,20 +463,33 @@ impl InputEditor {
                     self.start_command_picker();
                 }
                 if c == ' ' && self.picker.is_none() {
-                    match self.buffer.trim_end_matches(' ') {
-                        "/prompt" if !self.prompt_names.is_empty() => {
-                            self.start_prompt_picker();
+                    let current_text = self.buffer[..self.cursor].to_string();
+                    let trimmed = current_text.trim();
+                    if !trimmed.is_empty() && !trimmed.contains(' ') {
+                        let cmd = if trimmed.starts_with('/') {
+                            trimmed.to_string()
+                        } else {
+                            format!("/{}", trimmed)
+                        };
+
+                        match cmd.as_str() {
+                            "/models" | "/prompt" | "/theme" | "/provider" => {
+                                if !trimmed.starts_with('/') {
+                                    let start = current_text.rfind(trimmed).unwrap_or(0);
+                                    self.buffer.replace_range(start..self.cursor, &cmd);
+                                    self.cursor = start + cmd.len();
+                                }
+                                match cmd.as_str() {
+                                    "/models" => self.start_models_picker(),
+                                    "/prompt" => self.start_prompt_picker(),
+                                    "/theme" => self.start_theme_picker(),
+                                    "/provider" => self.start_provider_picker(),
+                                    _ => {}
+                                }
+                                // The character ' ' will be inserted below.
+                            }
+                            _ => {}
                         }
-                        "/theme" if !self.theme_names.is_empty() => {
-                            self.start_theme_picker();
-                        }
-                        "/provider" if !self.provider_names.is_empty() => {
-                            self.start_provider_picker();
-                        }
-                        "/models" => {
-                            self.start_models_picker();
-                        }
-                        _ => {}
                     }
                 }
                 if c == '.' && self.cursor == 0 {
@@ -591,11 +613,71 @@ impl InputEditor {
                 None
             }
             KeyCode::Tab => {
-                self.buffer.insert_str(self.cursor, "  ");
-                self.cursor += 2;
+                let current_text = self.buffer[..self.cursor].to_string();
+                let trimmed = current_text.trim();
+                if !trimmed.is_empty() && !trimmed.contains(' ') {
+                    let cmd = if trimmed.starts_with('/') {
+                        trimmed.to_string()
+                    } else {
+                        format!("/{}", trimmed)
+                    };
+
+                    match cmd.as_str() {
+                        "/models" => {
+                            if !trimmed.starts_with('/') {
+                                let start = current_text.rfind(trimmed).unwrap_or(0);
+                                self.buffer.replace_range(start..self.cursor, "/models");
+                                self.cursor = start + 7;
+                            }
+                            self.start_models_picker();
+                        }
+                        "/prompt" => {
+                            if !trimmed.starts_with('/') {
+                                let start = current_text.rfind(trimmed).unwrap_or(0);
+                                self.buffer.replace_range(start..self.cursor, "/prompt");
+                                self.cursor = start + 7;
+                            }
+                            self.start_prompt_picker();
+                        }
+                        "/theme" => {
+                            if !trimmed.starts_with('/') {
+                                let start = current_text.rfind(trimmed).unwrap_or(0);
+                                self.buffer.replace_range(start..self.cursor, "/theme");
+                                self.cursor = start + 6;
+                            }
+                            self.start_theme_picker();
+                        }
+                        "/provider" => {
+                            if !trimmed.starts_with('/') {
+                                let start = current_text.rfind(trimmed).unwrap_or(0);
+                                self.buffer.replace_range(start..self.cursor, "/provider");
+                                self.cursor = start + 9;
+                            }
+                            self.start_provider_picker();
+                        }
+                        _ if trimmed.starts_with('/') => {
+                            self.start_command_picker();
+                            if let Some(Picker::Command(ref mut p)) = self.picker {
+                                p.query = cmd.to_string();
+                                p.cursor = p.query.len();
+                                // trigger immediate filter
+                                p.char_input('\0');
+                                p.backspace();
+                            }
+                        }
+                        _ => {
+                            self.buffer.insert_str(self.cursor, "  ");
+                            self.cursor += 2;
+                        }
+                    }
+                } else {
+                    self.buffer.insert_str(self.cursor, "  ");
+                    self.cursor += 2;
+                }
                 self.yank_pos = None;
                 None
             }
+
             _ => None,
         }
     }

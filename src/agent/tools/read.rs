@@ -82,6 +82,7 @@ impl Tool for ReadTool {
 
     async fn call(&self, args: ReadArgs) -> Result<String, ToolError> {
         let path = crate::fs::expand_tilde(&args.path);
+        tracing::info!(path = %path, "executing read tool");
         let coaching = check_perm_path(&self.permission, &self.ask_tx, "read", &path).await?;
 
         let offset = args.offset.unwrap_or(1).saturating_sub(1);

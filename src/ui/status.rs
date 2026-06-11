@@ -14,60 +14,69 @@ fn fmt_tokens(n: u64) -> String {
     }
 }
 
+pub struct RenderArgs<'a> {
+    pub session: &'a Session,
+    pub is_running: bool,
+    pub loop_label: Option<&'a str>,
+    pub prompt_name: Option<&'a str>,
+    pub perm_mode: Option<&'a str>,
+    pub btw_in: u64,
+    pub btw_out: u64,
+}
+
 impl StatusLine {
-    pub fn render(
-        session: &Session,
-        is_running: bool,
-        _spinner_tick: u64,
-        loop_label: Option<&str>,
-        prompt_name: Option<&str>,
-        perm_mode: Option<&str>,
-        btw_in: u64,
-        btw_out: u64,
-    ) -> String {
-        let state = if is_running { "running" } else { "ready" };
-        let dir = Path::new(&session.working_dir)
+    pub fn render(args: RenderArgs) -> String {
+        let state = if args.is_running { "running" } else { "ready" };
+        let dir = Path::new(&args.session.working_dir)
             .file_name()
             .and_then(|n| n.to_str())
-            .unwrap_or(&session.working_dir);
+            .unwrap_or(&args.session.working_dir);
 
-        let ctx = session.context_window;
-        let used = session.total_estimated_tokens;
-        let pct = if ctx > 0 { (used * 100) / ctx } else { 0 };
+        let ctx = args.session.context_window;
+        let used = args.session.total_estimated_tokens;
+        let pct = used
+            .checked_mul(100)
+            .and_then(|v| v.checked_div(ctx))
+            .unwrap_or(0);
 
-        let btw_badge = if btw_in > 0 || btw_out > 0 {
-            format!(" btw:{}/{}", fmt_tokens(btw_in), fmt_tokens(btw_out))
-        } else {
-            String::new()
-        };
-
-        let token_detail = if session.total_input_tokens > 0 || session.total_output_tokens > 0 {
+        let btw_badge = if args.btw_in > 0 || args.btw_out > 0 {
             format!(
-                " i:{} o:{}",
-                fmt_tokens(session.total_input_tokens),
-                fmt_tokens(session.total_output_tokens),
+                " btw:{}/{}",
+                fmt_tokens(args.btw_in),
+                fmt_tokens(args.btw_out)
             )
         } else {
             String::new()
         };
 
-        let compact_badge = if session.compactions.is_empty() {
+        let token_detail =
+            if args.session.total_input_tokens > 0 || args.session.total_output_tokens > 0 {
+                format!(
+                    " i:{} o:{}",
+                    fmt_tokens(args.session.total_input_tokens),
+                    fmt_tokens(args.session.total_output_tokens),
+                )
+            } else {
+                String::new()
+            };
+
+        let compact_badge = if args.session.compactions.is_empty() {
             String::new()
         } else {
-            format!(" cmp:{}", session.compactions.len())
+            format!(" cmp:{}", args.session.compactions.len())
         };
 
-        let loop_badge = match loop_label {
+        let loop_badge = match args.loop_label {
             Some(label) => format!(" [{}]", label),
             None => String::new(),
         };
 
-        let prompt_badge = match prompt_name {
+        let prompt_badge = match args.prompt_name {
             Some(name) => format!(" [{}]", name),
             None => String::new(),
         };
 
-        let perm_badge = match perm_mode {
+        let perm_badge = match args.perm_mode {
             Some(m) if m != "standard" => format!(" | mode:{}", m),
             _ => String::new(),
         };
@@ -79,7 +88,7 @@ impl StatusLine {
             fmt_tokens(used),
             fmt_tokens(ctx),
             pct,
-            session.messages.len(),
+            args.session.messages.len(),
             token_detail,
             compact_badge,
             state,

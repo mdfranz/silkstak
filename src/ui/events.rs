@@ -81,7 +81,10 @@ pub fn render_session(
             if !styled.is_empty() {
                 styled[0].text = CompactString::from(format!("{} {}", prefix, styled[0].text));
             }
-            for entry in styled {
+            for mut entry in styled {
+                if entry.color == Color::White {
+                    entry.color = text_color;
+                }
                 renderer.write_line(&entry.text, entry.color)?;
             }
         } else {
@@ -100,6 +103,7 @@ pub fn render_session(
 pub fn show_welcome(renderer: &mut Renderer) -> std::io::Result<()> {
     use super::C_TOOL;
     use crossterm::style::Color;
+    let text_color = renderer.text_color();
 
     renderer.write_line("──────────────────────────────────────────", Color::Cyan)?;
     renderer.write_line("  zerostack Quickstart", Color::Cyan)?;
@@ -108,38 +112,38 @@ pub fn show_welcome(renderer: &mut Renderer) -> std::io::Result<()> {
     renderer.write_line("  Pickers:", C_TOOL)?;
     renderer.write_line(
         "    @<path>     File picker / auto-complete paths",
-        Color::White,
+        text_color,
     )?;
     renderer.write_line(
         "    !<command>  Run a shell command (output stored as assistant)",
-        Color::White,
+        text_color,
     )?;
     renderer.write_line(
         "    .<prompt>   Switch prompt or one-shot .<prompt> <message>",
-        Color::White,
+        text_color,
     )?;
     renderer.write_line("", Color::White)?;
     renderer.write_line("  Slash Commands:", C_TOOL)?;
-    renderer.write_line("    /model        Switch model", Color::White)?;
-    renderer.write_line("    /prompt       List / activate prompts", Color::White)?;
+    renderer.write_line("    /model        Switch model", text_color)?;
+    renderer.write_line("    /prompt       List / activate prompts", text_color)?;
     renderer.write_line(
         "    .autoconfig        Switches to auto-configurator",
-        Color::White,
+        text_color,
     )?;
-    renderer.write_line("    /mode         Change security mode", Color::White)?;
-    renderer.write_line("    /clear        Clear session", Color::White)?;
-    renderer.write_line("    /undo         Undo last exchange", Color::White)?;
-    renderer.write_line("    /compress     Free context window space", Color::White)?;
-    renderer.write_line("    /help         Show all commands", Color::White)?;
+    renderer.write_line("    /mode         Change security mode", text_color)?;
+    renderer.write_line("    /clear        Clear session", text_color)?;
+    renderer.write_line("    /undo         Undo last exchange", text_color)?;
+    renderer.write_line("    /compress     Free context window space", text_color)?;
+    renderer.write_line("    /help         Show all commands", text_color)?;
     renderer.write_line("", Color::White)?;
     renderer.write_line("  Keybindings:", C_TOOL)?;
-    renderer.write_line("    Ctrl+G     Open input in $EDITOR", Color::White)?;
-    renderer.write_line("    Ctrl+H     Launch lazygit", Color::White)?;
-    renderer.write_line("    Ctrl+S     Save session", Color::White)?;
-    renderer.write_line("    Tab        File picker / auto-complete", Color::White)?;
+    renderer.write_line("    Ctrl+G     Open input in $EDITOR", text_color)?;
+    renderer.write_line("    Ctrl+H     Launch lazygit", text_color)?;
+    renderer.write_line("    Ctrl+S     Save session", text_color)?;
+    renderer.write_line("    Tab        File picker / auto-complete", text_color)?;
     renderer.write_line(
         "  Website: https://gi-dellav.github.io/zerostack/",
-        Color::White,
+        text_color,
     )?;
     renderer.write_line("", Color::White)?;
     renderer.write_line("──────────────────────────────────────────", Color::Cyan)?;

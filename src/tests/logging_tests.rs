@@ -1,5 +1,5 @@
 #[cfg(test)]
-mod logging_tests {
+mod tests {
     use crate::resolve_log_file_path;
 
     #[test]

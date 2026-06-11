@@ -79,6 +79,7 @@ impl InputEditor {
                     quick_model_names: &self.quick_model_names,
                     live_model_names: &self.live_model_names,
                     provider_names: &self.provider_names,
+                    current_provider: &self.current_provider,
                 };
                 let (handled, replacement) =
                     handlers::handle_command_key(&mut self.buffer, &mut self.cursor, &ctx, p, key);

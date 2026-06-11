@@ -98,6 +98,13 @@ pub(crate) fn draw_picker_list(
 
     let top_row = rows.saturating_sub(3).saturating_sub(list_height as u16);
 
+    // Clear the entire picker area to ensure no background color bleeds through
+    for r in top_row..(rows.saturating_sub(3)) {
+        stdout.execute(MoveTo(0, r))?;
+        write!(stdout, "{}", ResetColor)?;
+        write!(stdout, "{}", Clear(crossterm::terminal::ClearType::CurrentLine))?;
+    }
+
     for (i, item) in matches
         .iter()
         .enumerate()
@@ -106,6 +113,7 @@ pub(crate) fn draw_picker_list(
     {
         let render_row = top_row + (i - start_idx) as u16;
         stdout.execute(MoveTo(0, render_row))?;
+        write!(stdout, "{}", ResetColor)?;
         write!(
             stdout,
             "{}",
@@ -160,6 +168,7 @@ pub(crate) fn draw_picker_list(
                 }
             }
         }
+        write!(stdout, "{}", Clear(crossterm::terminal::ClearType::UntilNewLine))?;
         write!(stdout, "{}", ResetColor)?;
     }
     stdout.flush()?;

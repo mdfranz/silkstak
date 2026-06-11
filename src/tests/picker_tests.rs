@@ -7,8 +7,9 @@ use std::path::PathBuf;
 fn test_models_picker_starts_on_quick_group() {
     let mut picker = ModelsPicker::new();
     picker.set_groups(
-        vec!["fast".to_string()],
+        vec![("fast".to_string(), "claude-haiku".to_string())],
         vec!["claude-opus-4-7".to_string()],
+        "anthropic".to_string(),
     );
     picker.activate();
     assert_eq!(picker.matches, vec!["fast".to_string()]);
@@ -18,8 +19,9 @@ fn test_models_picker_starts_on_quick_group() {
 fn test_models_picker_tab_toggles_to_provider_group() {
     let mut picker = ModelsPicker::new();
     picker.set_groups(
-        vec!["fast".to_string()],
+        vec![("fast".to_string(), "claude-haiku".to_string())],
         vec!["claude-opus-4-7".to_string()],
+        "anthropic".to_string(),
     );
     picker.activate();
     picker.toggle_group();
@@ -29,7 +31,7 @@ fn test_models_picker_tab_toggles_to_provider_group() {
 #[test]
 fn test_models_picker_starts_on_provider_when_quick_empty() {
     let mut picker = ModelsPicker::new();
-    picker.set_groups(Vec::new(), vec!["claude-opus-4-7".to_string()]);
+    picker.set_groups(Vec::new(), vec!["claude-opus-4-7".to_string()], "anthropic".to_string());
     picker.activate();
     assert_eq!(picker.matches, vec!["claude-opus-4-7".to_string()]);
 }
@@ -40,6 +42,7 @@ fn test_models_picker_fuzzy_subsequence_match() {
     picker.set_groups(
         Vec::new(),
         vec!["claude-opus-4-7".to_string(), "gpt-4o-mini".to_string()],
+        "anthropic".to_string(),
     );
     picker.activate();
     for c in "o47".chars() {

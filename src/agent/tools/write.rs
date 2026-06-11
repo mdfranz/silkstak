@@ -51,6 +51,7 @@ impl Tool for WriteTool {
 
     async fn call(&self, args: WriteArgs) -> Result<String, ToolError> {
         let expanded = crate::fs::expand_tilde(&args.path);
+        tracing::info!(path = %expanded, "executing write tool");
         let coaching = check_perm_path(&self.permission, &self.ask_tx, "write", &expanded).await?;
 
         let path = Path::new(&expanded);
