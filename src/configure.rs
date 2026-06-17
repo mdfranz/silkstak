@@ -66,7 +66,7 @@ struct ProviderSetup {
 
 pub fn run_configure(cfg: &config::Config) -> anyhow::Result<()> {
     let config_path = config::config_file_path();
-    println!("zerostack setup");
+    println!("silkstak setup");
     println!("Config file: {}", config_path.display());
     println!();
 

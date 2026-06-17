@@ -43,8 +43,8 @@ dev:
 run:
 	cargo run -- $(ARGS)
 
-# Run with debug logging to zerostack.log (app) and zerostack.log.rig (framework)
-# App logs go to zerostack.log, rig framework logs go to zerostack.log.rig
+# Run with debug logging to silkstak.log (app) and rig.log (framework)
+# App logs go to silkstak.log, rig framework logs go to rig.log
 debug:
 	RUST_LOG=zerostack=debug,rig=info RUST_LOG_FILE=1 cargo run -- $(ARGS)
 
@@ -80,7 +80,7 @@ uninstall:
 # Clean build artifacts and logs
 clean:
 	cargo clean
-	rm -f zerostack.log
+	rm -f silkstak.log rig.log zerostack.log zerostack.log.rig
 
 # Help
 help:
@@ -90,7 +90,7 @@ help:
 	@echo "  dev         Build unoptimized (faster for dev)"
 	@echo "  check       Run cargo check (fastest feedback)"
 	@echo "  run         Run (use ARGS=\"...\" for flags)"
-	@echo "  debug       Run with RUST_LOG=debug and log to zerostack.log"
+	@echo "  debug       Run with RUST_LOG=debug and log to silkstak.log and rig.log"
 	@echo "  test        Run tests"
 	@echo "  fmt         Format and clippy"
 	@echo "  check-ci    Check fmt and clippy (CI style)"

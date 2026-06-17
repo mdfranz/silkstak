@@ -79,6 +79,18 @@ pub(crate) fn draw_picker_list(
 
     let max_items = (rows.saturating_sub(bottom_reserved)).min(10) as usize;
 
+    // Clear the entire picker area first to prevent visual leftovers
+    let top_clear_row = rows.saturating_sub(3).saturating_sub(max_items as u16);
+    for r in top_clear_row..=rows.saturating_sub(3) {
+        stdout.execute(MoveTo(0, r))?;
+        write!(stdout, "{}", ResetColor)?;
+        write!(
+            stdout,
+            "{}",
+            Clear(crossterm::terminal::ClearType::CurrentLine)
+        )?;
+    }
+
     if matches.is_empty() {
         let r = rows.saturating_sub(3);
         stdout.execute(MoveTo(0, r))?;
@@ -97,17 +109,6 @@ pub(crate) fn draw_picker_list(
     let end_idx = (start_idx + list_height).min(matches.len());
 
     let top_row = rows.saturating_sub(3).saturating_sub(list_height as u16);
-
-    // Clear the entire picker area to ensure no background color bleeds through
-    for r in top_row..(rows.saturating_sub(3)) {
-        stdout.execute(MoveTo(0, r))?;
-        write!(stdout, "{}", ResetColor)?;
-        write!(
-            stdout,
-            "{}",
-            Clear(crossterm::terminal::ClearType::CurrentLine)
-        )?;
-    }
 
     for (i, item) in matches
         .iter()

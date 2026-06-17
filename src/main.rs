@@ -57,90 +57,78 @@ fn resolve_mode(cli: &cli::Cli, cfg: &config::Config) -> SecurityMode {
 }
 
 pub fn resolve_log_file_path(env_log_file: Option<String>, env_rust_log: bool) -> Option<String> {
-    env_log_file.map(|val| {
-        if env_rust_log || val == "1" || val == "true" || val.is_empty() {
-            "zerostack.log".to_string()
-        } else {
-            val
+    match env_log_file {
+        Some(val) => {
+            if val == "0" || val == "false" || val == "off" {
+                None
+            } else if env_rust_log || val == "1" || val == "true" || val.is_empty() {
+                Some("silkstak.log".to_string())
+            } else {
+                Some(val)
+            }
         }
-    })
+        None => Some("silkstak.log".to_string()),
+    }
 }
 
 fn init_logging() {
     use tracing_subscriber::layer::{Layer, SubscriberExt};
     use tracing_subscriber::util::SubscriberInitExt;
 
-    let filter = tracing_subscriber::EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("warn,rig=off"));
-
     let log_file = resolve_log_file_path(
         std::env::var("RUST_LOG_FILE").ok(),
         std::env::var("RUST_LOG").is_ok(),
     );
 
-    match log_file {
-        Some(path) => {
-            match std::fs::OpenOptions::new()
+    if let Some(path) = log_file {
+        if let Ok(file) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&path)
+        {
+            // Split rig logs into a separate file
+            let rig_path = if path == "silkstak.log" {
+                "rig.log".to_string()
+            } else {
+                format!("{}.rig", path)
+            };
+
+            let rig_file = std::fs::OpenOptions::new()
                 .create(true)
                 .append(true)
-                .open(&path)
-            {
-                Ok(file) => {
-                    // Split rig logs into a separate file
-                    let rig_file = std::fs::OpenOptions::new()
-                        .create(true)
-                        .append(true)
-                        .open(format!("{}.rig", path))
-                        .ok();
+                .open(&rig_path)
+                .ok();
 
-                    let main_filter =
-                        tracing_subscriber::EnvFilter::new("silkstak=debug,rig=off,info");
-                    let rig_filter = tracing_subscriber::EnvFilter::new("rig=info,off");
+            let main_filter = tracing_subscriber::EnvFilter::new("silkstak=debug,rig=off,info");
+            let rig_filter = tracing_subscriber::EnvFilter::new("rig=info,off");
 
-                    let main_layer = tracing_subscriber::fmt::layer()
-                        .json()
-                        .with_writer(file)
-                        .with_filter(main_filter);
-
-                    let rig_layer = rig_file.map(|f| {
-                        tracing_subscriber::fmt::layer()
-                            .json()
-                            .with_writer(f)
-                            .with_filter(rig_filter)
-                    });
-
-                    if let Some(rig_l) = rig_layer {
-                        tracing_subscriber::registry()
-                            .with(main_layer)
-                            .with(rig_l)
-                            .init();
-                    } else {
-                        tracing_subscriber::registry().with(main_layer).init();
-                    }
-
-                    tracing::info!("Logging initialized (file: {}, rig: {}.rig)", path, path);
-                }
-                Err(err) => {
-                    eprintln!(
-                        "Warning: failed to open log file '{}': {}. Falling back to stderr.",
-                        path, err
-                    );
-                    tracing_subscriber::fmt()
-                        .json()
-                        .with_writer(std::io::stderr)
-                        .with_env_filter(filter)
-                        .init();
-                    tracing::warn!("Logging initialized (stderr) - log file unavailable");
-                }
-            }
-        }
-        None => {
-            tracing_subscriber::fmt()
+            let main_layer = tracing_subscriber::fmt::layer()
                 .json()
-                .with_writer(std::io::stderr)
-                .with_env_filter(filter)
-                .init();
-            tracing::info!("Logging initialized (stderr)");
+                .with_writer(file)
+                .with_filter(main_filter);
+
+            let rig_layer = rig_file.map(|f| {
+                tracing_subscriber::fmt::layer()
+                    .json()
+                    .with_writer(f)
+                    .with_filter(rig_filter)
+            });
+
+            if let Some(rig_l) = rig_layer {
+                tracing_subscriber::registry()
+                    .with(main_layer)
+                    .with(rig_l)
+                    .init();
+            } else {
+                tracing_subscriber::registry().with(main_layer).init();
+            }
+
+            tracing::info!("Logging initialized (file: {}, rig: {})", path, rig_path);
+        } else {
+            eprintln!(
+                "Warning: failed to open log file '{}'. Logging disabled.",
+                path
+            );
         }
     }
 }

@@ -1,12 +1,12 @@
 [package]
 name = "silkstak"
-version = "1.5.0-rc1"
+version = "1.5.1"
 edition = "2024"
-authors = ["Giuseppe Della Vedova"]
+authors = ["Giuseppe Della Vedova","Matt Franz"]
 description = "Minimalistic coding agent written in Rust, optimized for memory footprint and performance"
 license = "GPL-3.0-only"
-homepage = "https://github.com/gi-dellav/silkstak"
-repository = "https://github.com/gi-dellav/silkstak"
+homepage = "https://github.com/mdfranz/silkstak"
+repository = "https://github.com/mdfranz/silkstak"
 readme = "README.md"
 keywords = ["ai", "cli", "dev"]
 

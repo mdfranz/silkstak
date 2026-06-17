@@ -87,8 +87,43 @@ fn refresh_display(
     btw_in: u64,
     btw_out: u64,
 ) -> io::Result<()> {
+    let ctx = session.context_window;
+    let used = session.total_estimated_tokens;
+    let pct = used
+        .checked_mul(100)
+        .and_then(|v| v.checked_div(ctx))
+        .unwrap_or(0);
+
+    let token_detail =
+        if session.total_input_tokens > 0 || session.total_output_tokens > 0 {
+            format!(
+                " i:{} o:{}",
+                crate::ui::status::fmt_tokens(session.total_input_tokens),
+                crate::ui::status::fmt_tokens(session.total_output_tokens),
+            )
+        } else {
+            String::new()
+        };
+
+    let compact_badge = if session.compactions.is_empty() {
+        String::new()
+    } else {
+        format!(" cmp:{}", session.compactions.len())
+    };
+
     renderer.top_bar = Some(LineEntry {
-        text: format!("{} / {}", session.provider, session.model).into(),
+        text: format!(
+            "{} / {} | {}/{} ({}%) | {}msgs{}{}",
+            session.provider,
+            session.model,
+            crate::ui::status::fmt_tokens(used),
+            crate::ui::status::fmt_tokens(ctx),
+            pct,
+            session.messages.len(),
+            token_detail,
+            compact_badge,
+        )
+        .into(),
         color: Color::White,
     });
     let (_, rows) = crossterm::terminal::size().unwrap_or((80, 24));

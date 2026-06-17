@@ -29,17 +29,15 @@ pub fn format_time(rfc3339: &str) -> CompactString {
 pub fn render_session(
     renderer: &mut Renderer,
     session: &Session,
-    cli: &Cli,
-    cfg: &Config,
+    _cli: &Cli,
+    _cfg: &Config,
     context: &ContextFiles,
 ) -> anyhow::Result<()> {
     renderer.clear_content()?;
     let welcome = format!(
-        "zerostack {} ({})  {}  {}",
+        "silkstak {} ({})",
         env!("CARGO_PKG_VERSION"),
         env!("GIT_COMMIT_HASH"),
-        cli.resolve_provider(cfg),
-        cli.resolve_model(cfg),
     );
     renderer.write_line(&welcome, Color::Cyan)?;
     renderer.write_line("", Color::White)?;
@@ -106,7 +104,7 @@ pub fn show_welcome(renderer: &mut Renderer) -> std::io::Result<()> {
     let text_color = renderer.text_color();
 
     renderer.write_line("──────────────────────────────────────────", Color::Cyan)?;
-    renderer.write_line("  zerostack Quickstart", Color::Cyan)?;
+    renderer.write_line("  silkstak Quickstart", Color::Cyan)?;
     renderer.write_line("──────────────────────────────────────────", Color::Cyan)?;
     renderer.write_line("", Color::White)?;
     renderer.write_line("  Pickers:", C_TOOL)?;
@@ -142,7 +140,7 @@ pub fn show_welcome(renderer: &mut Renderer) -> std::io::Result<()> {
     renderer.write_line("    Ctrl+S     Save session", text_color)?;
     renderer.write_line("    Tab        File picker / auto-complete", text_color)?;
     renderer.write_line(
-        "  Website: https://gi-dellav.github.io/zerostack/",
+        "  Website: https://github.com/gi-dellav/silkstak",
         text_color,
     )?;
     renderer.write_line("", Color::White)?;

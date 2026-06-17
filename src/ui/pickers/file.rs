@@ -178,6 +178,18 @@ impl FilePicker {
 
         let max_items = (rows.saturating_sub(4)).min(10) as usize;
 
+        // Clear the entire picker area first to prevent visual leftovers
+        let top_clear_row = rows.saturating_sub(3).saturating_sub(max_items as u16);
+        for r in top_clear_row..=rows.saturating_sub(3) {
+            stdout.execute(MoveTo(0, r))?;
+            write!(stdout, "{}", ResetColor)?;
+            write!(
+                stdout,
+                "{}",
+                Clear(crossterm::terminal::ClearType::CurrentLine)
+            )?;
+        }
+
         if self.loading {
             let r = rows.saturating_sub(3);
             stdout.execute(MoveTo(0, r))?;

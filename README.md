@@ -55,7 +55,7 @@ A `Makefile` is provided for common development and installation tasks:
 - **Linter & Formatting**: `make fmt` (runs `rustfmt` and `clippy`)
 - **Install**: `make install` (builds with all features and copies binary to `~/.local/bin/zerostack`)
 - **Uninstall**: `make uninstall`
-- **Debug**: `make debug` (runs with debug logs to `zerostack.log`)
+- **Debug**: `make debug` (runs with debug logs to `silkstak.log` and `rig.log`)
 
 ### Optional: sandbox mode
 
@@ -108,7 +108,7 @@ silkstak --provider openai --model gpt-4o
 # Enable debug logging
 RUST_LOG=debug zerostack
 
-# Or use the debug make target (writes to zerostack.log)
+# Or use the debug make target (writes to silkstak.log and rig.log)
 make debug
 ```
 

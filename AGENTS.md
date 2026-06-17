@@ -15,5 +15,8 @@ Important notes:
 - Always update docs/ files when needed.
 - If adding or editing slash commands, edit the slash commands `/` picker in the TUI.
 
+DO NOT TEST unless I ask, especially when I ask you to review
+
+
 # Documentation
 - NEVER use file:/// references in Markdown. Use relative paths instead.

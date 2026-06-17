@@ -27,7 +27,7 @@ const COMMANDS: &[(&str, &str)] = &[
     ("/regen-prompts", "re-extract built-in prompts to disk"),
     ("/regen-themes", "re-extract built-in themes to disk"),
     ("/editsys", "open system prompt in $EDITOR"),
-    ("/quit", "exit zerostack"),
+    ("/quit", "exit silkstak"),
     ("/exit", "alias for /quit"),
     ("/clear", "clear the current session"),
     ("/new", "start a new session"),

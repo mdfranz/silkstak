@@ -486,22 +486,22 @@ Logging is configured via environment variables:
   filter syntax. Examples: `debug`, `info`, `warn,rig=off`, `zerostack=debug`.
   Default: `warn,rig=off` (show warnings except from the rig library).
 
-- **`RUST_LOG_FILE`**: Enables logging to a file instead of stderr. Set to a
-  file path to log to that file, or set to `1`, `true`, or empty to log to
-  `zerostack.log` in the current directory. If the file cannot be opened (e.g.,
-  permission denied), logging gracefully falls back to stderr.
+- **`RUST_LOG_FILE`**: Configures the log file destination. By default, logs are written
+  to `silkstak.log` (and its split-log companion `rig.log`) in the current directory.
+  * To log to a custom file, set to the desired file path.
+  * To disable logging completely, set `RUST_LOG_FILE` to `0`, `false`, or `off`.
 
 Examples:
 
 ```bash
-# Log to stderr with debug level for zerostack
-RUST_LOG=zerostack=debug zerostack
+# Log to silkstak.log and rig.log in append mode (default behavior)
+zerostack
 
-# Log to zerostack.log in append mode
-RUST_LOG_FILE=1 zerostack
+# Disable logging completely
+RUST_LOG_FILE=off zerostack
 
-# Log to a custom file
-RUST_LOG_FILE=/var/log/zerostack.log zerostack
+# Log to a custom file path
+RUST_LOG_FILE=/var/log/silkstak.log zerostack
 
 # Log with RUST_LOG filter to a file
 RUST_LOG=info RUST_LOG_FILE=debug.log zerostack
