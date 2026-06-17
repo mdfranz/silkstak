@@ -105,11 +105,6 @@ pub fn agents_path() -> PathBuf {
     config_path().join("agent").join("AGENTS.md")
 }
 
-#[cfg(feature = "archmd")]
-pub fn architecture_path() -> PathBuf {
-    config_path().join("agent").join("ARCHITECTURE.md")
-}
-
 fn theme_file_path() -> PathBuf {
     data_dir().join("theme.json")
 }

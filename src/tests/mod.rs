@@ -1,7 +1,6 @@
 #[cfg(all(test, feature = "acp"))]
 mod acp_tests;
-#[cfg(all(test, feature = "archmd"))]
-mod archmd_tests;
+
 #[cfg(test)]
 mod auth_tests;
 #[cfg(test)]

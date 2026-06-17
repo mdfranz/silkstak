@@ -346,8 +346,6 @@ async fn main() -> anyhow::Result<()> {
             sub_model.to_string(),
             task_max_turns,
             cfg.clone(),
-            #[cfg(feature = "archmd")]
-            context.architecture.clone(),
         );
     }
 
@@ -418,28 +416,6 @@ async fn main() -> anyhow::Result<()> {
             // Reload context to pick up freshly-regenerated prompts/themes
             context = context::load(cli.resolve_no_context_files(&cfg));
         }
-    }
-
-    // ARCHITECTURE.md prompt: defer to here so all heavy setup completes first.
-    #[cfg(feature = "archmd")]
-    let arch_created = if !cli.resolve_no_context_files(&cfg) && cfg.arch_prompt.unwrap_or(true) {
-        let cwd = std::env::current_dir().ok();
-        if let Some(ref cwd) = cwd {
-            crate::extras::archmd::ask_and_create(cwd).unwrap_or_else(|e| {
-                tracing::warn!("Architecture.md prompt failed: {e}");
-                false
-            })
-        } else {
-            false
-        }
-    } else {
-        false
-    };
-
-    // Reload context after potential ARCHITECTURE.md creation
-    #[cfg(feature = "archmd")]
-    if arch_created {
-        context.architecture = crate::context::load_architecture();
     }
 
     // Default prompt resolution (after prompts may have been regenerated)
@@ -528,27 +504,6 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
-    // Build the auto-trigger message for ARCHITECTURE.md creation
-    #[cfg(feature = "archmd")]
-    let arch_msg: Option<String> = if arch_created {
-        Some(
-            "I've just created an empty ARCHITECTURE.md template at the project root. \
-            Explore the codebase thoroughly using the `task` tool (delegating parallel exploration to subagents) \
-            and fill ARCHITECTURE.md with a high-level architecture document covering:\n\
-            - Directory layout and module responsibilities\n\
-            - Key types, traits, and their relationships\n\
-            - Control flow (how requests/events flow through the system)\n\
-            - Data flow (how data is transformed from input to output)\n\
-            - Design decisions and rationale\n\
-            - External dependencies and how they are used\n\
-            - Entry points for different execution modes\n\n\
-            Keep the document under ~300 lines of code total. Keep entries concise and reference specific source files."
-                .to_string(),
-        )
-    } else {
-        None
-    };
-    #[cfg(not(feature = "archmd"))]
     let arch_msg: Option<String> = None;
 
     if cli.print {

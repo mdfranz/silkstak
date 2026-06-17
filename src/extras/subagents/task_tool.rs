@@ -97,11 +97,6 @@ editing in a known location, grepping for a literal you will act on immediately.
 
         let subagent_event_tx = clone_subagent_event_tx();
 
-        #[cfg(feature = "archmd")]
-        let architecture = with_config(|cfg| cfg.architecture.clone());
-        #[cfg(not(feature = "archmd"))]
-        let architecture: Option<String> = None;
-
         // Spawn one task per prompt, each guarded by a wall-clock timeout.
         // AbortHandles are stored in a guard so that if the parent future is
         // dropped (user cancels, session exits) all in-flight subagents are
@@ -112,12 +107,10 @@ editing in a known location, grepping for a literal you will act on immediately.
             let prompt_text = prompt_text.clone();
             let model = client.completion_model(model_name.clone());
             let event_tx = subagent_event_tx.clone();
-            let architecture = architecture.clone();
             let config = config.clone();
             let join_handle = tokio::spawn(async move {
                 let work = async {
-                    let agent =
-                        builder::build_explore_agent(model, max_turns, &config, architecture).await;
+                    let agent = builder::build_explore_agent(model, max_turns, &config).await;
                     agent
                         .run_subagent(&prompt_text, max_turns, event_tx.as_ref())
                         .await

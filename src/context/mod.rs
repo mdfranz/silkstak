@@ -63,17 +63,11 @@ pub struct ContextFiles {
     pub extra_files: Vec<std::path::PathBuf>,
     #[cfg(feature = "memory")]
     pub memory: Option<String>,
-    #[cfg(feature = "archmd")]
-    pub architecture: Option<String>,
 }
 
 impl ContextFiles {
     pub fn reload(&mut self) {
-        self.agents = walk_context_files().0;
-        #[cfg(feature = "archmd")]
-        {
-            self.architecture = walk_context_files().1;
-        }
+        self.agents = walk_context_files();
         self.prompts = prompts::load();
         if let Some(name) = &self.current_prompt_name {
             self.current_prompt = self.prompts.get(name).cloned();
@@ -90,15 +84,11 @@ impl ContextFiles {
 pub fn load(no_context_files: bool) -> ContextFiles {
     let _ = prompts::ensure_global();
     let _ = themes::ensure_global();
-    let (agents, arch_candidate) = if no_context_files {
-        (None, None)
+    let agents = if no_context_files {
+        None
     } else {
         walk_context_files()
     };
-    #[cfg(feature = "archmd")]
-    let architecture = arch_candidate;
-    #[cfg(not(feature = "archmd"))]
-    let _ = arch_candidate;
     let prompt_map = prompts::load();
     let theme_map = themes::load();
     let theme_name = crate::session::storage::load_theme_name();
@@ -114,8 +104,6 @@ pub fn load(no_context_files: bool) -> ContextFiles {
         extra_files: Vec::new(),
         #[cfg(feature = "memory")]
         memory,
-        #[cfg(feature = "archmd")]
-        architecture,
     }
 }
 
@@ -127,28 +115,15 @@ fn load_file(path: &PathBuf) -> Option<String> {
     }
 }
 
-/// Walks from CWD up to root once, collecting AGENTS.md, CLAUDE.md, and
-/// ARCHITECTURE.md files. This avoids the duplicate traversal that the
-/// older separate load_agents / load_architecture performed.
-fn walk_context_files() -> (Option<String>, Option<String>) {
+/// Walks from CWD up to root once, collecting AGENTS.md and CLAUDE.md files.
+fn walk_context_files() -> Option<String> {
     let mut agent_parts: SmallVec<[String; 4]> = SmallVec::new();
-    let mut arch_parts: SmallVec<[String; 4]> = SmallVec::new();
 
     let global_agents = storage::agents_path();
     if let Some(content) = load_file(&global_agents)
         && !content.trim().is_empty()
     {
         agent_parts.push(format!("# Global AGENTS.md\n{}", content));
-    }
-
-    #[cfg(feature = "archmd")]
-    {
-        let global_arch = storage::architecture_path();
-        if let Some(content) = load_file(&global_arch)
-            && !content.trim().is_empty()
-        {
-            arch_parts.push(format!("# Global ARCHITECTURE.md\n{}", content));
-        }
     }
 
     let cwd = std::env::current_dir().ok();
@@ -163,37 +138,13 @@ fn walk_context_files() -> (Option<String>, Option<String>) {
                     agent_parts.push(format!("# {} ({})\n{}", name, dir.display(), content));
                 }
             }
-            #[cfg(feature = "archmd")]
-            {
-                let path = dir.join("ARCHITECTURE.md");
-                if let Some(content) = load_file(&path)
-                    && !content.trim().is_empty()
-                {
-                    arch_parts.push(format!(
-                        "# ARCHITECTURE.md ({})\n{}",
-                        dir.display(),
-                        content
-                    ));
-                }
-            }
             current = dir.parent();
         }
     }
 
-    let agents = if agent_parts.is_empty() {
+    if agent_parts.is_empty() {
         None
     } else {
         Some(agent_parts.join("\n\n"))
-    };
-    let architecture = if arch_parts.is_empty() {
-        None
-    } else {
-        Some(arch_parts.join("\n\n"))
-    };
-    (agents, architecture)
-}
-
-#[cfg(feature = "archmd")]
-pub(crate) fn load_architecture() -> Option<String> {
-    walk_context_files().1
+    }
 }

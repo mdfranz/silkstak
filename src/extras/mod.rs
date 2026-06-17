@@ -16,9 +16,6 @@ pub mod memory;
 #[cfg(feature = "subagents")]
 pub mod subagents;
 
-#[cfg(feature = "archmd")]
-pub mod archmd;
-
 pub mod status_signals;
 
 pub(crate) mod truncate;

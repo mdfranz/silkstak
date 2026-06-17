@@ -4,30 +4,20 @@ use crate::provider::{AnyAgent, AnyModel, OpenAiAgent, OpenAiModel};
 use rig::agent::{Agent, AgentBuilder};
 use rig::completion::CompletionModel;
 
-pub struct BuilderArgs<'a> {
+pub struct BuilderArgs {
     pub max_turns: usize,
     pub max_text_file_size: u64,
     pub max_read_lines: u64,
     pub max_grep_results: u64,
     pub max_find_results: u64,
     pub max_list_dir_entries: Option<u64>,
-    #[cfg(feature = "archmd")]
-    pub architecture: Option<&'a str>,
 }
 
 fn build_explore_agent_inner<M: CompletionModel + 'static>(
     model: M,
     args: BuilderArgs,
 ) -> Agent<M> {
-    let mut preamble = prompt::explore_prompt();
-
-    #[cfg(feature = "archmd")]
-    if let Some(arch) = args.architecture
-        && !arch.is_empty()
-    {
-        preamble.push_str("\n\n");
-        preamble.push_str(arch);
-    }
+    let preamble = prompt::explore_prompt();
 
     let tools: Vec<Box<dyn rig::tool::ToolDyn>> = vec![
         Box::new(tools::ReadTool::new(
@@ -60,7 +50,6 @@ pub(crate) async fn build_explore_agent(
     model: AnyModel,
     max_turns: usize,
     cfg: &crate::config::Config,
-    #[cfg(feature = "archmd")] architecture: Option<String>,
 ) -> AnyAgent {
     let args = BuilderArgs {
         max_turns,
@@ -69,8 +58,6 @@ pub(crate) async fn build_explore_agent(
         max_grep_results: cfg.resolve_subagent_max_grep_results(),
         max_find_results: cfg.resolve_subagent_max_find_results(),
         max_list_dir_entries: cfg.resolve_subagent_max_list_dir_entries(),
-        #[cfg(feature = "archmd")]
-        architecture: architecture.as_deref(),
     };
 
     match model {

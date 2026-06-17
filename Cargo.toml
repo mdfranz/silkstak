@@ -11,7 +11,7 @@ readme = "README.md"
 keywords = ["ai", "cli", "dev"]
 
 [features]
-default = ['loop', 'git-worktree', 'mcp', 'subagents', 'archmd']
+default = ['loop', 'git-worktree', 'mcp', 'subagents']
 status-signals = []
 loop = []
 git-worktree = []
@@ -24,7 +24,6 @@ mcp = [
 acp = ["dep:agent-client-protocol", "dep:blocking"]
 memory = []
 subagents = []
-archmd = []
 multithread = ["tokio/rt-multi-thread"]
 
 [dependencies]

@@ -94,16 +94,15 @@ fn refresh_display(
         .and_then(|v| v.checked_div(ctx))
         .unwrap_or(0);
 
-    let token_detail =
-        if session.total_input_tokens > 0 || session.total_output_tokens > 0 {
-            format!(
-                " i:{} o:{}",
-                crate::ui::status::fmt_tokens(session.total_input_tokens),
-                crate::ui::status::fmt_tokens(session.total_output_tokens),
-            )
-        } else {
-            String::new()
-        };
+    let token_detail = if session.total_input_tokens > 0 || session.total_output_tokens > 0 {
+        format!(
+            " i:{} o:{}",
+            crate::ui::status::fmt_tokens(session.total_input_tokens),
+            crate::ui::status::fmt_tokens(session.total_output_tokens),
+        )
+    } else {
+        String::new()
+    };
 
     let compact_badge = if session.compactions.is_empty() {
         String::new()

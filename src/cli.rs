@@ -133,7 +133,7 @@ pub struct Cli {
     #[arg(
         long = "no-context-files",
         short = 'n',
-        help = "Disable AGENTS.md and ARCHITECTURE.md loading"
+        help = "Disable AGENTS.md and CLAUDE.md loading"
     )]
     pub no_context_files: bool,
 

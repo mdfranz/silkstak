@@ -15,7 +15,6 @@ Then write a comprehensive AGENTS.md that documents: \
 Keep it focused and actionable for a coding agent.";
 
 const AGENTS_DESC: &str = "tells coding agents how to build, test, and work with this codebase";
-const ARCHITECTURE_DESC: &str = "documents high-level codebase architecture for AI agents";
 
 fn ask_yn(question: &str) -> bool {
     print!("{question} ");
@@ -61,19 +60,14 @@ pub async fn handle(parts: &[&str], ctx: &mut SlashCtx<'_>) -> anyhow::Result<()
 
     let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
     let agents_path = cwd.join("AGENTS.md");
-    let arch_path = cwd.join("ARCHITECTURE.md");
 
     let agents_exists = agents_path.exists();
-    let arch_exists = arch_path.exists();
 
-    let (create_agents, create_arch) = if force {
+    let create_agents = if force {
         if agents_exists {
             write_ok(ctx.renderer, "AGENTS.md exists — will overwrite");
         }
-        if arch_exists {
-            write_ok(ctx.renderer, "ARCHITECTURE.md exists — will overwrite");
-        }
-        (true, true)
+        true
     } else {
         exit_tui_for_io();
 
@@ -83,46 +77,11 @@ pub async fn handle(parts: &[&str], ctx: &mut SlashCtx<'_>) -> anyhow::Result<()
             agents_exists,
             &cwd,
         ));
-        let create_b = ask_yn(&build_question(
-            "ARCHITECTURE.md",
-            ARCHITECTURE_DESC,
-            arch_exists,
-            &cwd,
-        ));
 
         restore_tui_and_render(ctx)?;
 
-        (create_a, create_b)
+        create_a
     };
-
-    if create_arch {
-        #[cfg(feature = "archmd")]
-        {
-            if arch_exists {
-                let _ = std::fs::remove_file(&arch_path);
-            }
-            match crate::extras::archmd::create_architecture_template(&cwd) {
-                Ok(()) => write_ok(
-                    ctx.renderer,
-                    format!(
-                        "Created {}/ARCHITECTURE.md — edit it to describe the codebase architecture.",
-                        cwd.display()
-                    ),
-                ),
-                Err(e) => write_error(
-                    ctx.renderer,
-                    format!("Failed to create ARCHITECTURE.md: {}", e),
-                ),
-            }
-        }
-        #[cfg(not(feature = "archmd"))]
-        {
-            write_error(
-                ctx.renderer,
-                "ARCHITECTURE.md creation requires the 'archmd' feature.",
-            );
-        }
-    }
 
     if create_agents {
         if !ctx.context.prompts.contains_key("code") {

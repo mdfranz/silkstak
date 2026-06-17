@@ -144,7 +144,7 @@ Accepted top-level keys:
 | `max_agent_turns`         | integer | Maximum agent turns per response. Default: `200`.                                                                                                                           |
 | `temperature`             | number  | Model temperature value. Only configurable via the `--temperature` CLI flag (`0.0` to `2.0`). Config-file value is parsed but not currently applied.                        |
 | `no_tools`                | boolean | Disable all tools. Default: `false`.                                                                                                                                        |
-| `no_context_files`        | boolean | Disable loading global/project `AGENTS.md`, `CLAUDE.md`, and `ARCHITECTURE.md` (if `archmd` feature enabled) context files. Default: `false`.                               |
+| `no_context_files`        | boolean | Disable loading global/project `AGENTS.md` and `CLAUDE.md` context files. Default: `false`.                               |
 | `context_window`          | integer | Session context-window size used for status and auto-compaction. Default: `128000`.                                                                                         |
 | `reserve_tokens`          | integer | Tokens to reserve before compaction is triggered. Default: `16384`.                                                                                                         |
 | `keep_recent_tokens`      | integer | Approximate recent-token budget kept verbatim during compaction. Default: `10000`.                                                                                          |

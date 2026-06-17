@@ -32,8 +32,6 @@ pub async fn build_agent_inner<M: CompletionModel + 'static>(
         "You respond concisely without showing your reasoning.\n\n"
     };
     let context_agents = context.agents.as_deref().unwrap_or("");
-    #[cfg(feature = "archmd")]
-    let context_architecture = context.architecture.as_deref().unwrap_or("");
     let context_prompt = context.current_prompt.as_deref().unwrap_or("");
     let cwd = std::env::current_dir()
         .ok()
@@ -55,14 +53,6 @@ pub async fn build_agent_inner<M: CompletionModel + 'static>(
             0
         }
         + if !cwd.is_empty() { 30 + cwd.len() } else { 0 };
-
-    #[cfg(feature = "archmd")]
-    let total_len = total_len
-        + if context.architecture.is_some() {
-            2 + context_architecture.len()
-        } else {
-            0
-        };
 
     #[cfg(feature = "memory")]
     let total_len = total_len
@@ -91,11 +81,7 @@ pub async fn build_agent_inner<M: CompletionModel + 'static>(
         preamble.push_str("\n\n");
         preamble.push_str(context_agents);
     }
-    #[cfg(feature = "archmd")]
-    if !context_architecture.is_empty() {
-        preamble.push_str("\n\n");
-        preamble.push_str(context_architecture);
-    }
+
     if !context_prompt.is_empty() {
         preamble.push_str("\n\n---\n\n");
         preamble.push_str(context_prompt);
@@ -283,13 +269,7 @@ pub fn build_btw_agent_inner<M: CompletionModel + 'static>(
         preamble.push('\n');
         preamble.push_str(agents);
     }
-    #[cfg(feature = "archmd")]
-    if let Some(arch) = context.architecture.as_deref()
-        && !arch.is_empty()
-    {
-        preamble.push_str("\n\n");
-        preamble.push_str(arch);
-    }
+
     if let Some(p) = context.current_prompt.as_deref()
         && !p.is_empty()
     {

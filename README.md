@@ -145,8 +145,7 @@ You can also create custom prompts by placing markdown files in
 
 Additionally, the agent automatically loads `AGENTS.md` or `CLAUDE.md` from the
 project root or any ancestor directory, injecting their contents into the
-system prompt. When enabled (feature `archmd`), `ARCHITECTURE.md` is also loaded
-the same way, providing high-level design context to speed up exploration.
+system prompt to speed up exploration.
 Use `-n` / `--no-context-files` to disable all context file loading.
 
 ## Permission system

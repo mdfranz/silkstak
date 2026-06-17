@@ -35,7 +35,7 @@ pub fn render_session(
 ) -> anyhow::Result<()> {
     renderer.clear_content()?;
     let welcome = format!(
-        "silkstak {} ({})",
+        "Welcome to silkstak {} ({})",
         env!("CARGO_PKG_VERSION"),
         env!("GIT_COMMIT_HASH"),
     );
@@ -43,11 +43,6 @@ pub fn render_session(
     renderer.write_line("", Color::White)?;
     if context.agents.is_some() {
         renderer.write_line("loaded AGENTS.md", Color::DarkGrey)?;
-        renderer.write_line("", Color::White)?;
-    }
-    #[cfg(feature = "archmd")]
-    if context.architecture.is_some() {
-        renderer.write_line("loaded ARCHITECTURE.md", Color::DarkGrey)?;
         renderer.write_line("", Color::White)?;
     }
     if !session.compactions.is_empty() {
