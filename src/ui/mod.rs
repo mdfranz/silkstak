@@ -1288,6 +1288,7 @@ pub async fn run_interactive(
 
                                     let cmd_owned = cmd.to_string();
                                     let shell = cli.resolve_shell(cfg);
+                                    tracing::info!(command = %cmd, shell = %shell, "executing manual shell command");
                                     let output = tokio::task::spawn_blocking(move || {
                                         let mut command = std::process::Command::new(&shell);
                                         if shell == "cmd" || shell == "cmd.exe" {
@@ -1302,6 +1303,13 @@ pub async fn run_interactive(
                                     .await
                                     .map_err(|e| anyhow::anyhow!("spawn error: {}", e))?
                                     .map_err(|e| anyhow::anyhow!("command error: {}", e))?;
+
+                                    tracing::info!(
+                                        command = %cmd,
+                                        exit_code = output.status.code().unwrap_or(-1),
+                                        success = output.status.success(),
+                                        "manual shell command completed"
+                                    );
 
                                     let mut result = String::new();
                                     if !output.stdout.is_empty() {

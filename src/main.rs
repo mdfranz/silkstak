@@ -512,6 +512,7 @@ async fn main() -> anyhow::Result<()> {
             let cmd = msg.strip_prefix('!').map(|s| s.trim()).unwrap_or("");
             if !cmd.is_empty() {
                 let shell = cli.resolve_shell(&cfg);
+                tracing::info!(command = %cmd, shell = %shell, "executing manual shell command");
                 let mut command = std::process::Command::new(&shell);
                 if shell == "cmd" || shell == "cmd.exe" {
                     command.arg("/C").arg(cmd);
@@ -521,6 +522,12 @@ async fn main() -> anyhow::Result<()> {
                     command.arg("-c").arg(cmd);
                 }
                 let output = command.output()?;
+                tracing::info!(
+                    command = %cmd,
+                    exit_code = output.status.code().unwrap_or(-1),
+                    success = output.status.success(),
+                    "manual shell command completed"
+                );
                 let mut result = String::new();
                 if !output.stdout.is_empty() {
                     result.push_str(&String::from_utf8_lossy(&output.stdout));
