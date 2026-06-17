@@ -271,6 +271,7 @@ async fn run_prompt(
             .unwrap_or_default()
     };
 
+    let is_reasoning = crate::provider::is_reasoning_model(&model_str);
     let agent = crate::provider::build_agent(
         model,
         &state.cli,
@@ -280,6 +281,7 @@ async fn run_prompt(
         ask_tx,
         sandbox,
         false,
+        is_reasoning,
         #[cfg(feature = "mcp")]
         None::<&crate::extras::mcp::McpClientManager>,
     )

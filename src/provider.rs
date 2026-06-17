@@ -737,6 +737,7 @@ async fn build_openai_agent(
     ask_tx: Option<AskSender>,
     sandbox: Sandbox,
     reasoning_enabled: bool,
+    is_reasoning: bool,
     #[cfg(feature = "mcp")] mcp_manager: Option<&McpClientManager>,
 ) -> OpenAiAgent {
     match model {
@@ -750,6 +751,7 @@ async fn build_openai_agent(
                 ask_tx,
                 sandbox,
                 reasoning_enabled,
+                is_reasoning,
                 #[cfg(feature = "mcp")]
                 mcp_manager,
             )
@@ -765,6 +767,7 @@ async fn build_openai_agent(
                 ask_tx,
                 sandbox,
                 reasoning_enabled,
+                is_reasoning,
                 #[cfg(feature = "mcp")]
                 mcp_manager,
             )
@@ -783,6 +786,7 @@ pub async fn build_agent(
     ask_tx: Option<AskSender>,
     sandbox: Sandbox,
     reasoning_enabled: bool,
+    is_reasoning: bool,
     #[cfg(feature = "mcp")] mcp_manager: Option<&McpClientManager>,
 ) -> AnyAgent {
     match model {
@@ -796,6 +800,7 @@ pub async fn build_agent(
                 ask_tx,
                 sandbox.clone(),
                 reasoning_enabled,
+                is_reasoning,
                 #[cfg(feature = "mcp")]
                 mcp_manager,
             )
@@ -811,6 +816,7 @@ pub async fn build_agent(
                 ask_tx,
                 sandbox.clone(),
                 reasoning_enabled,
+                is_reasoning,
                 #[cfg(feature = "mcp")]
                 mcp_manager,
             )
@@ -826,6 +832,7 @@ pub async fn build_agent(
                 ask_tx,
                 sandbox.clone(),
                 reasoning_enabled,
+                is_reasoning,
                 #[cfg(feature = "mcp")]
                 mcp_manager,
             )
@@ -841,6 +848,7 @@ pub async fn build_agent(
                 ask_tx,
                 sandbox,
                 reasoning_enabled,
+                is_reasoning,
                 #[cfg(feature = "mcp")]
                 mcp_manager,
             )
@@ -858,6 +866,7 @@ pub fn build_btw_agent(
     permission: &Option<PermCheck>,
     ask_tx: &Option<AskSender>,
     reasoning_enabled: bool,
+    is_reasoning: bool,
 ) -> AnyAgent {
     match model {
         AnyModel::OpenAI(m) => AnyAgent::OpenAI(match m {
@@ -869,6 +878,7 @@ pub fn build_btw_agent(
                 permission,
                 ask_tx,
                 reasoning_enabled,
+                is_reasoning,
             )),
             OpenAiModel::Completions(m) => {
                 OpenAiAgent::Completions(builder::build_btw_agent_inner(
@@ -879,6 +889,7 @@ pub fn build_btw_agent(
                     permission,
                     ask_tx,
                     reasoning_enabled,
+                    is_reasoning,
                 ))
             }
         }),
@@ -890,6 +901,7 @@ pub fn build_btw_agent(
             permission,
             ask_tx,
             reasoning_enabled,
+            is_reasoning,
         )),
         AnyModel::Gemini(m) => AnyAgent::Gemini(builder::build_btw_agent_inner(
             m,
@@ -899,6 +911,7 @@ pub fn build_btw_agent(
             permission,
             ask_tx,
             reasoning_enabled,
+            is_reasoning,
         )),
         AnyModel::Ollama(m) => AnyAgent::Ollama(builder::build_btw_agent_inner(
             m,
@@ -908,6 +921,7 @@ pub fn build_btw_agent(
             permission,
             ask_tx,
             reasoning_enabled,
+            is_reasoning,
         )),
     }
 }

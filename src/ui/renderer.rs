@@ -61,6 +61,7 @@ pub struct Renderer {
     pub show_cursor: bool,
     pub header: Option<LineEntry>,
     pub top_bar: Option<LineEntry>,
+    pub picker_height: u16,
 }
 
 impl Renderer {
@@ -90,6 +91,7 @@ impl Renderer {
             show_cursor: true,
             header: None,
             top_bar: None,
+            picker_height: 0,
         })
     }
 
@@ -188,7 +190,7 @@ impl Renderer {
         if self.header.is_some() || self.top_bar.is_some() {
             base = base.saturating_sub(1);
         }
-        base
+        base.saturating_sub(self.picker_height as usize)
     }
 
     fn viewport_start(&self, visible: usize, total: usize) -> usize {

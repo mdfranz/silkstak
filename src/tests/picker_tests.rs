@@ -4,7 +4,7 @@ use crate::ui::pickers::models::ModelsPicker;
 use std::path::PathBuf;
 
 #[test]
-fn test_models_picker_starts_on_quick_group() {
+fn test_models_picker_starts_on_provider_group() {
     let mut picker = ModelsPicker::new();
     picker.set_groups(
         vec![("fast".to_string(), "claude-haiku".to_string())],
@@ -12,11 +12,11 @@ fn test_models_picker_starts_on_quick_group() {
         "anthropic".to_string(),
     );
     picker.activate();
-    assert_eq!(picker.matches, vec!["fast".to_string()]);
+    assert_eq!(picker.matches, vec!["claude-opus-4-7".to_string()]);
 }
 
 #[test]
-fn test_models_picker_tab_toggles_to_provider_group() {
+fn test_models_picker_tab_toggles_to_quick_group() {
     let mut picker = ModelsPicker::new();
     picker.set_groups(
         vec![("fast".to_string(), "claude-haiku".to_string())],
@@ -25,19 +25,19 @@ fn test_models_picker_tab_toggles_to_provider_group() {
     );
     picker.activate();
     picker.toggle_group();
-    assert_eq!(picker.matches, vec!["claude-opus-4-7".to_string()]);
+    assert_eq!(picker.matches, vec!["fast".to_string()]);
 }
 
 #[test]
-fn test_models_picker_starts_on_provider_when_quick_empty() {
+fn test_models_picker_starts_on_quick_when_provider_empty() {
     let mut picker = ModelsPicker::new();
     picker.set_groups(
+        vec![("fast".to_string(), "claude-haiku".to_string())],
         Vec::new(),
-        vec!["claude-opus-4-7".to_string()],
         "anthropic".to_string(),
     );
     picker.activate();
-    assert_eq!(picker.matches, vec!["claude-opus-4-7".to_string()]);
+    assert_eq!(picker.matches, vec!["fast".to_string()]);
 }
 
 #[test]

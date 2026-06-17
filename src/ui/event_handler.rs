@@ -39,6 +39,7 @@ pub async fn ensure_agent(
     if agent.is_some() {
         return;
     }
+    let is_reasoning = crate::provider::is_reasoning_model(&session.model);
     let model = client.completion_model(session.model.to_string());
     *agent = Some(
         crate::provider::build_agent(
@@ -50,6 +51,7 @@ pub async fn ensure_agent(
             ask_tx.clone(),
             sandbox.clone(),
             reasoning_enabled,
+            is_reasoning,
             mcp_manager,
         )
         .await,
@@ -73,6 +75,7 @@ pub async fn ensure_agent(
     if agent.is_some() {
         return;
     }
+    let is_reasoning = crate::provider::is_reasoning_model(&session.model);
     let model = client.completion_model(session.model.to_string());
     *agent = Some(
         crate::provider::build_agent(
@@ -84,6 +87,7 @@ pub async fn ensure_agent(
             ask_tx.clone(),
             sandbox.clone(),
             reasoning_enabled,
+            is_reasoning,
         )
         .await,
     );
@@ -434,6 +438,7 @@ async fn handle_agent_done(
             ls.last_summary = Some(summary);
             ls.iteration += 1;
             let prompt = ls.build_prompt();
+            let is_reasoning = crate::provider::is_reasoning_model(&session.model);
             *agent = Some({
                 let model = client.completion_model(session.model.to_string());
                 crate::provider::build_agent(
@@ -445,6 +450,7 @@ async fn handle_agent_done(
                     ask_tx.clone(),
                     sandbox.clone(),
                     true,
+                    is_reasoning,
                     #[cfg(feature = "mcp")]
                     mcp_manager,
                 )
@@ -479,6 +485,7 @@ async fn handle_agent_done(
                 session.working_dir = compact_str::CompactString::new(&main_path);
                 context.reload();
                 apply_current_prompt_mode(context, permission);
+                let is_reasoning = crate::provider::is_reasoning_model(&session.model);
                 *agent = Some({
                     let model = client.completion_model(session.model.to_string());
                     crate::provider::build_agent(
@@ -490,6 +497,7 @@ async fn handle_agent_done(
                         ask_tx.clone(),
                         sandbox.clone(),
                         true,
+                        is_reasoning,
                         #[cfg(feature = "mcp")]
                         mcp_manager,
                     )

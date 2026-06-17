@@ -52,6 +52,7 @@ pub struct SlashCtx<'a> {
 
 impl SlashCtx<'_> {
     pub async fn rebuild_agent(&mut self) {
+        let is_reasoning = crate::provider::is_reasoning_model(&self.session.model);
         let model = self.client.completion_model(self.session.model.to_string());
         *self.agent = Some(
             crate::provider::build_agent(
@@ -63,6 +64,7 @@ impl SlashCtx<'_> {
                 self.ask_tx.clone(),
                 self.sandbox.clone(),
                 *self.reasoning_enabled,
+                is_reasoning,
                 #[cfg(feature = "mcp")]
                 self.mcp_manager,
             )
@@ -81,6 +83,7 @@ impl SlashCtx<'_> {
             &self.cfg.custom_providers_map(),
             self.cfg.api_keys.as_ref(),
         )?;
+        let is_reasoning = crate::provider::is_reasoning_model(&self.session.model);
         let model = self.client.completion_model(self.session.model.to_string());
         *self.agent = Some(
             crate::provider::build_agent(
@@ -92,6 +95,7 @@ impl SlashCtx<'_> {
                 self.ask_tx.clone(),
                 self.sandbox.clone(),
                 new_reasoning,
+                is_reasoning,
                 #[cfg(feature = "mcp")]
                 self.mcp_manager,
             )
@@ -205,6 +209,7 @@ pub async fn handle_compress(
     );
     session.compress(summary, cut_idx, tokens_before);
 
+    let is_reasoning = crate::provider::is_reasoning_model(&session.model);
     let model = client.completion_model(session.model.to_string());
     *agent = Some(
         crate::provider::build_agent(
@@ -216,6 +221,7 @@ pub async fn handle_compress(
             ask_tx.clone(),
             sandbox.clone(),
             reasoning_enabled,
+            is_reasoning,
             #[cfg(feature = "mcp")]
             mcp_manager,
         )

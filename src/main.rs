@@ -566,6 +566,8 @@ async fn main() -> anyhow::Result<()> {
                 eprintln!("error: empty command after '!'");
             }
         } else {
+            let model_id = cli.resolve_model(&cfg);
+            let is_reasoning = provider::is_reasoning_model(&model_id);
             let agent = provider::build_agent(
                 completion_model,
                 &cli,
@@ -575,6 +577,7 @@ async fn main() -> anyhow::Result<()> {
                 ask_tx,
                 sandbox.clone(),
                 true,
+                is_reasoning,
                 #[cfg(feature = "mcp")]
                 None,
             )
@@ -603,6 +606,7 @@ async fn main() -> anyhow::Result<()> {
     } else {
         #[cfg(feature = "loop")]
         if cli.loop_mode {
+            let is_reasoning = provider::is_reasoning_model(&model);
             let model = client.completion_model(model.to_string());
             let agent = provider::build_agent(
                 model,
@@ -613,6 +617,7 @@ async fn main() -> anyhow::Result<()> {
                 ask_tx,
                 sandbox.clone(),
                 true,
+                is_reasoning,
                 #[cfg(feature = "mcp")]
                 None,
             )

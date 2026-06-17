@@ -423,6 +423,16 @@ impl InputEditor {
                 self.cursor += 1;
                 None
             }
+            KeyCode::Esc => {
+                if !self.buffer.is_empty() {
+                    self.buffer.clear();
+                    self.cursor = 0;
+                    self.history_pos = None;
+                    self.draft = None;
+                    self.yank_pos = None;
+                }
+                None
+            }
             KeyCode::Enter => {
                 if self.picker.as_ref().is_some_and(|p| p.active()) {
                     return None;

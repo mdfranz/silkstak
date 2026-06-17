@@ -23,6 +23,7 @@ pub async fn build_agent_inner<M: CompletionModel + 'static>(
     ask_tx: Option<AskSender>,
     sandbox: Sandbox,
     reasoning_enabled: bool,
+    is_reasoning: bool,
     #[cfg(feature = "mcp")] mcp_manager: Option<&McpClientManager>,
 ) -> Agent<M> {
     let reasoning_prefix = if reasoning_enabled {
@@ -115,8 +116,10 @@ pub async fn build_agent_inner<M: CompletionModel + 'static>(
 
     let mut builder = AgentBuilder::new(model).preamble(&preamble);
 
-    let max_tokens = cli.resolve_max_tokens(cfg);
-    builder = builder.max_tokens(max_tokens);
+    if !is_reasoning {
+        let max_tokens = cli.resolve_max_tokens(cfg);
+        builder = builder.max_tokens(max_tokens);
+    }
 
     let max_turns = cli.resolve_max_agent_turns(cfg);
     builder = builder.default_max_turns(max_turns);
@@ -259,6 +262,7 @@ pub fn build_btw_agent_inner<M: CompletionModel + 'static>(
     permission: &Option<PermCheck>,
     ask_tx: &Option<AskSender>,
     _reasoning_enabled: bool,
+    is_reasoning: bool,
 ) -> Agent<M> {
     let cwd = std::env::current_dir()
         .ok()
@@ -299,14 +303,15 @@ pub fn build_btw_agent_inner<M: CompletionModel + 'static>(
     #[cfg(feature = "memory")]
     crate::extras::memory::append_memory_block(&mut preamble, context.memory.as_deref());
 
-    let max_tokens = cli.resolve_max_tokens(cfg);
-
     // Honor --no-tools: fall back to a pure-context, single-turn answer.
     if cli.resolve_no_tools(cfg) {
         let mut builder = AgentBuilder::new(model)
             .preamble(&preamble)
-            .default_max_turns(1)
-            .max_tokens(max_tokens);
+            .default_max_turns(1);
+        if !is_reasoning {
+            let max_tokens = cli.resolve_max_tokens(cfg);
+            builder = builder.max_tokens(max_tokens);
+        }
         if let Some(temp) = cli.temperature {
             builder = builder.temperature(temp.clamp(0.0, 2.0));
         }
@@ -349,8 +354,12 @@ pub fn build_btw_agent_inner<M: CompletionModel + 'static>(
     let mut builder = AgentBuilder::new(model)
         .preamble(&preamble)
         .default_max_turns(BTW_MAX_TURNS)
-        .max_tokens(max_tokens)
         .tools(read_tools);
+
+    if !is_reasoning {
+        let max_tokens = cli.resolve_max_tokens(cfg);
+        builder = builder.max_tokens(max_tokens);
+    }
 
     if let Some(temp) = cli.temperature {
         builder = builder.temperature(temp.clamp(0.0, 2.0));

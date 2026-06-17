@@ -62,6 +62,48 @@ impl Picker {
             Picker::Models(p) => p.draw(),
         }
     }
+
+    pub fn height(&self, rows: u16) -> u16 {
+        if !self.active() {
+            return 0;
+        }
+        match self {
+            Picker::File(p) => {
+                if p.loading {
+                    1
+                } else if p.matches.is_empty() {
+                    1
+                } else {
+                    let max_items = (rows.saturating_sub(4)).min(10) as usize;
+                    max_items.min(p.matches.len()) as u16
+                }
+            }
+            Picker::Command(p) => {
+                if p.matches.is_empty() {
+                    1
+                } else {
+                    let max_items = (rows.saturating_sub(4)).min(10) as usize;
+                    max_items.min(p.matches.len()) as u16
+                }
+            }
+            Picker::Prefixed(p, _) => {
+                if p.matches.is_empty() {
+                    1
+                } else {
+                    let max_items = (rows.saturating_sub(4)).min(10) as usize;
+                    max_items.min(p.matches.len()) as u16
+                }
+            }
+            Picker::Models(p) => {
+                if p.matches.is_empty() {
+                    1
+                } else {
+                    let max_items = (rows.saturating_sub(5)).min(10) as usize;
+                    max_items.min(p.matches.len()) as u16
+                }
+            }
+        }
+    }
 }
 
 use super::InputEditor;

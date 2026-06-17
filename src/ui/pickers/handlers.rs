@@ -91,7 +91,7 @@ pub fn handle_file_key(
                 }
             }
             picker.deactivate();
-            true
+            false
         }
         KeyCode::Esc => {
             let at_pos = buffer.rfind('@');
@@ -399,7 +399,7 @@ pub fn handle_prefixed_key(
                 *cursor = prefix_len + name.len();
             }
             picker.deactivate();
-            true
+            false
         }
         KeyCode::Esc => {
             let after_offset = prefix_len + picker.query.chars().count();
@@ -522,7 +522,7 @@ pub fn handle_models_key(
                 *cursor = prefix_len + name.len();
             }
             picker.deactivate();
-            true
+            false
         }
         KeyCode::Esc => {
             let after_offset = prefix_len + picker.query.chars().count();

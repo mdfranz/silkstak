@@ -33,7 +33,7 @@ pub fn handle(_parts: &[&str], ctx: &mut SlashCtx<'_>) {
     );
     write_result(
         ctx.renderer,
-        "  /models                current model + quick models (this provider)",
+        "  /models                open interactive model picker",
     );
     write_result(
         ctx.renderer,

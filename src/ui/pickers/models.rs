@@ -52,7 +52,7 @@ impl ModelsPicker {
         self.cursor = 0;
         self.matches.clear();
         self.selected = 0;
-        self.group = if self.quick.is_empty() && !self.provider.is_empty() {
+        self.group = if self.provider.is_empty() && !self.quick.is_empty() {
             1
         } else {
             0
@@ -98,6 +98,15 @@ impl ModelsPicker {
 
     fn filter(&mut self) {
         if self.group == 0 {
+            let mut scored: Vec<(i32, &String)> = self
+                .provider
+                .iter()
+                .filter_map(|n| fuzzy_score(n, &self.query).map(|s| (s, n)))
+                .collect();
+            scored.sort_by_key(|b| std::cmp::Reverse(b.0));
+            self.matches = scored.iter().take(50).map(|(_, n)| (*n).clone()).collect();
+            self.match_descriptions = vec![None; self.matches.len()];
+        } else {
             let mut scored: Vec<(i32, &String, &String)> = self
                 .quick
                 .iter()
@@ -116,15 +125,6 @@ impl ModelsPicker {
                 .take(50)
                 .map(|(_, _, m)| Some((*m).clone()))
                 .collect();
-        } else {
-            let mut scored: Vec<(i32, &String)> = self
-                .provider
-                .iter()
-                .filter_map(|n| fuzzy_score(n, &self.query).map(|s| (s, n)))
-                .collect();
-            scored.sort_by_key(|b| std::cmp::Reverse(b.0));
-            self.matches = scored.iter().take(50).map(|(_, n)| (*n).clone()).collect();
-            self.match_descriptions = vec![None; self.matches.len()];
         }
         self.selected = 0;
     }
@@ -150,28 +150,28 @@ impl ModelsPicker {
     }
 
     pub fn header_text(&self) -> String {
-        let label_quick = if self.group == 0 {
-            format!("▶ Aliases ({})", self.quick.len())
-        } else {
-            format!("  Aliases ({})", self.quick.len())
-        };
-
         let label_provider = {
             let name = if self.provider_name.is_empty() {
                 "Provider".to_string()
             } else {
                 format!("{} Models", self.provider_name)
             };
-            if self.group == 1 {
+            if self.group == 0 {
                 format!("▶ All {} ({})", name, self.provider.len())
             } else {
                 format!("  All {} ({})", name, self.provider.len())
             }
         };
 
+        let label_quick = if self.group == 1 {
+            format!("▶ Aliases ({})", self.quick.len())
+        } else {
+            format!("  Aliases ({})", self.quick.len())
+        };
+
         format!(
             "{}   {}    (Left/Right to switch · Tab to cycle)",
-            label_quick, label_provider
+            label_provider, label_quick
         )
     }
 

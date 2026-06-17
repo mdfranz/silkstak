@@ -18,7 +18,7 @@ pub struct FilePicker {
     pub selected: usize,
     file_cache: Arc<Mutex<Vec<PathBuf>>>,
     monochrome: bool,
-    loading: bool,
+    pub loading: bool,
     walk_done: Arc<AtomicBool>,
 }
 

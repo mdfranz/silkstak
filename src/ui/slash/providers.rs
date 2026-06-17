@@ -99,6 +99,7 @@ pub(crate) async fn warm_model_cache(
 async fn apply_model(ctx: &mut SlashCtx<'_>, model_id: &str) {
     let new_model = compact_str::CompactString::new(model_id);
     let model = ctx.client.completion_model(new_model.to_string());
+    let is_reasoning = crate::provider::is_reasoning_model(model_id);
     *ctx.agent = Some(
         crate::provider::build_agent(
             model,
@@ -109,6 +110,7 @@ async fn apply_model(ctx: &mut SlashCtx<'_>, model_id: &str) {
             ctx.ask_tx.clone(),
             ctx.sandbox.clone(),
             *ctx.reasoning_enabled,
+            is_reasoning,
             #[cfg(feature = "mcp")]
             ctx.mcp_manager,
         )
@@ -166,6 +168,20 @@ async fn handle_models(parts: &[&str], ctx: &mut SlashCtx<'_>) -> anyhow::Result
     let show_all = arg1 == "all";
     let show_list = arg1 == "list";
     let refresh = arg1 == "refresh";
+
+    // /models without arguments — launch interactive model picker directly
+    if parts.len() < 2 {
+        if fetch_models_cached(&provider, is_custom, ctx.client, ctx.cli, ctx.cfg, false)
+            .await
+            .is_ok()
+        {
+            ctx.input.set_live_model_names(cached_model_ids(&provider));
+        }
+        ctx.input.buffer = "/models ".into();
+        ctx.input.cursor = 8;
+        ctx.input.start_models_picker();
+        return Ok(());
+    }
 
     // /models <name-or-id> — quick-model alias first, then raw model id
     if parts.len() >= 2 && !show_all && !show_list && !refresh {

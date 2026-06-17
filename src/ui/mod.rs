@@ -91,12 +91,17 @@ fn refresh_display(
         text: format!("{} / {}", session.provider, session.model).into(),
         color: Color::White,
     });
-    if let Some(ref picker) = input.picker {
+    let (_, rows) = crossterm::terminal::size().unwrap_or((80, 24));
+    if let Some(ref picker) = input.picker
+        && picker.active()
+    {
         renderer.header = picker.header();
         renderer.show_cursor = false;
+        renderer.picker_height = picker.height(rows);
     } else {
         renderer.header = None;
         renderer.show_cursor = true;
+        renderer.picker_height = 0;
     }
     renderer.render_viewport()?;
     let status = StatusLine::render(crate::ui::status::RenderArgs {
@@ -448,6 +453,7 @@ pub async fn run_interactive(
                 #[cfg(feature = "mcp")]
                 let mcp_ref = ensure_mcp_manager(&mut mcp_manager, cfg).await;
                 let model = client.completion_model(session.model.to_string());
+                let is_reasoning = crate::provider::is_reasoning_model(&session.model);
                 agent = Some(
                     crate::provider::build_agent(
                         model,
@@ -458,6 +464,7 @@ pub async fn run_interactive(
                         ask_tx.clone(),
                         sandbox.clone(),
                         reasoning_enabled,
+                        is_reasoning,
                         #[cfg(feature = "mcp")]
                         mcp_ref,
                     )
@@ -487,6 +494,7 @@ pub async fn run_interactive(
                 #[cfg(feature = "mcp")]
                 let mcp_ref = ensure_mcp_manager(&mut mcp_manager, cfg).await;
                 let model = client.completion_model(session.model.to_string());
+                let is_reasoning = crate::provider::is_reasoning_model(&session.model);
                 agent = Some(
                     crate::provider::build_agent(
                         model,
@@ -497,6 +505,7 @@ pub async fn run_interactive(
                         ask_tx.clone(),
                         sandbox.clone(),
                         reasoning_enabled,
+                        is_reasoning,
                         #[cfg(feature = "mcp")]
                         mcp_ref,
                     )
@@ -553,6 +562,7 @@ pub async fn run_interactive(
     let (mut user_tx, mut user_rx) = mpsc::channel::<UserEvent>(64);
     let mut running = Arc::new(AtomicBool::new(true));
     let mut event_handle = Some(spawn_event_thread(user_tx.clone(), running.clone()));
+    let mut confirm_quit = false;
 
     loop {
         tokio::select! {
@@ -618,6 +628,23 @@ pub async fn run_interactive(
                         continue;
                     }
                     UserEvent::Key(key) => {
+                        if confirm_quit {
+                            let quit = match key.code {
+                                KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter => true,
+                                KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => true,
+                                KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => true,
+                                _ => false,
+                            };
+                            if quit {
+                                break;
+                            } else {
+                                confirm_quit = false;
+                                renderer.write_line("Quit cancelled", Color::Green)?;
+                                refresh_display(&mut renderer, &mut input, session, is_running, loop_label.as_deref(), context.current_prompt_name.as_deref(), perm_mode().as_deref(), btw_total_in, btw_total_out)?;
+                                continue;
+                            }
+                        }
+
                         let is_ctrl_c = key.code == KeyCode::Char('c')
                             && key.modifiers.contains(KeyModifiers::CONTROL);
                         let is_ctrl_d = key.code == KeyCode::Char('d')
@@ -681,7 +708,9 @@ pub async fn run_interactive(
                                 )?;
                                 refresh_display(&mut renderer, &mut input, session, is_running, loop_label.as_deref(), context.current_prompt_name.as_deref(), perm_mode().as_deref(), btw_total_in, btw_total_out)?;
                             } else {
-                                break;
+                                confirm_quit = true;
+                                renderer.write_line("Are you sure you want to quit? (y/n)", Color::Yellow)?;
+                                refresh_display(&mut renderer, &mut input, session, is_running, loop_label.as_deref(), context.current_prompt_name.as_deref(), perm_mode().as_deref(), btw_total_in, btw_total_out)?;
                             }
                             continue;
                         }
@@ -891,8 +920,9 @@ pub async fn run_interactive(
                                             session, &turn_trace, is_running,
                                         );
                                         let model = client.completion_model(session.model.to_string());
+                                        let is_reasoning = crate::provider::is_reasoning_model(&session.model);
                                         let btw_agent = crate::provider::build_btw_agent(
-                                            model, cli, cfg, context, &permission, &ask_tx, reasoning_enabled,
+                                            model, cli, cfg, context, &permission, &ask_tx, reasoning_enabled, is_reasoning,
                                         );
                                         let runner = btw_agent.spawn_btw(
                                             btw_text.to_string(), snapshot, btw_tx.clone(), id,
@@ -1107,6 +1137,7 @@ pub async fn run_interactive(
                                             #[cfg(feature = "mcp")]
                                             let mcp_ref = ensure_mcp_manager(&mut mcp_manager, cfg).await;
                                             let model = client.completion_model(session.model.to_string());
+                                            let is_reasoning = crate::provider::is_reasoning_model(&session.model);
                                             agent = Some(crate::provider::build_agent(
                                                 model,
                                                 cli,
@@ -1116,6 +1147,7 @@ pub async fn run_interactive(
                                                 ask_tx.clone(),
                                                 sandbox.clone(),
                                                 reasoning_enabled,
+                                                is_reasoning,
                                                 #[cfg(feature = "mcp")] mcp_ref,
                                             ).await);
                                             render_session(&mut renderer, session, cli, cfg, context)?;
