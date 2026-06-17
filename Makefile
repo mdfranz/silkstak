@@ -1,25 +1,37 @@
 .PHONY: build build-all dev run test fmt check check-ci install clean help
 
+# Export environment variables for sub-processes
+export RUST_LOG
+export RUST_LOG_FILE
+
 # --- Compiler Optimizations ---
 
-# Auto-detect sccache
-ifeq ($(shell which sccache 2>/dev/null),)
-    # sccache not found
+# --- OS & Binary Name Auto-detection ---
+ifeq ($(OS),Windows_NT)
+    BIN_NAME := silkstak
+    EXE := .exe
 else
-    export RUSTC_WRAPPER := sccache
-endif
-
-# Auto-detect mold or lld for faster linking (only on Linux, as macOS clang has issues with -fuse-ld)
-UNAME_S := $(shell uname -s)
-ifeq ($(UNAME_S),Linux)
-    ifeq ($(shell which mold 2>/dev/null),)
-        ifeq ($(shell which lld 2>/dev/null),)
-            # No fast linker found, use default
-        else
-            export RUSTFLAGS := -C link-arg=-fuse-ld=lld
-        endif
+    BIN_NAME := silkstak
+    EXE :=
+    # Auto-detect sccache (Unix only)
+    ifeq ($(shell which sccache 2>/dev/null),)
+        # sccache not found
     else
-        export RUSTFLAGS := -C link-arg=-fuse-ld=mold
+        export RUSTC_WRAPPER := sccache
+    endif
+
+    # Auto-detect mold or lld for faster linking (only on Linux, as macOS clang has issues with -fuse-ld)
+    UNAME_S := $(shell uname -s)
+    ifeq ($(UNAME_S),Linux)
+        ifeq ($(shell which mold 2>/dev/null),)
+            ifeq ($(shell which lld 2>/dev/null),)
+                # No fast linker found, use default
+            else
+                export RUSTFLAGS := -C link-arg=-fuse-ld=lld
+            endif
+        else
+            export RUSTFLAGS := -C link-arg=-fuse-ld=mold
+        endif
     endif
 endif
 
@@ -46,7 +58,7 @@ run:
 # Run with debug logging to silkstak.log (app) and rig.log (framework)
 # App logs go to silkstak.log, rig framework logs go to rig.log
 debug:
-	RUST_LOG=zerostack=debug,rig=info RUST_LOG_FILE=1 cargo run -- $(ARGS)
+	$(MAKE) run RUST_LOG=silkstak=debug,rig=info RUST_LOG_FILE=1 ARGS="$(ARGS)"
 
 # Run tests
 test: fmt
@@ -66,21 +78,33 @@ check-ci:
 	cargo fmt --check
 	cargo clippy --all-targets --all-features -- -D warnings
 
-# Install binary to ~/.local/bin
+# Install binary
 install: build-all
+ifeq ($(OS),Windows_NT)
+	cargo install --path .
+else
 	mkdir -p ~/.local/bin
-	cp target/release/zerostack ~/.local/bin/zerostack
-	chmod +x ~/.local/bin/zerostack
-	@echo "Installed to ~/.local/bin/zerostack"
+	cp target/release/$(BIN_NAME) ~/.local/bin/$(BIN_NAME)
+	chmod +x ~/.local/bin/$(BIN_NAME)
+	@echo "Installed to ~/.local/bin/$(BIN_NAME)"
+endif
 
 uninstall:
-	rm -vf ~/.local/bin/zerostack
-	rm -vf ~/.cargo/bin/zerostack
+ifeq ($(OS),Windows_NT)
+	cargo uninstall $(BIN_NAME)
+else
+	rm -vf ~/.local/bin/$(BIN_NAME)
+	rm -vf ~/.cargo/bin/$(BIN_NAME)
+endif
 
 # Clean build artifacts and logs
 clean:
 	cargo clean
+ifeq ($(OS),Windows_NT)
+	-del /f /q silkstak.log rig.log zerostack.log zerostack.log.rig 2>nul
+else
 	rm -f silkstak.log rig.log zerostack.log zerostack.log.rig
+endif
 
 # Help
 help:

@@ -36,7 +36,7 @@ impl Sandbox {
         Sandbox {
             enabled,
             backend: backend.to_string(),
-            shell: "bash".to_string(),
+            shell: if cfg!(windows) { "powershell".to_string() } else { "bash".to_string() },
         }
     }
 
@@ -47,10 +47,20 @@ impl Sandbox {
         self
     }
 
+    fn append_shell_args(&self, cmd: &mut Command, command: &str) {
+        if self.shell == "cmd" || self.shell == "cmd.exe" {
+            cmd.arg("/C").arg(command);
+        } else if self.shell == "powershell" || self.shell == "powershell.exe" || self.shell == "pwsh" {
+            cmd.arg("-Command").arg(command);
+        } else {
+            cmd.arg("-c").arg(command);
+        }
+    }
+
     pub fn wrap_command(&self, command: &str) -> Command {
         if !self.enabled {
             let mut cmd = Command::new(&self.shell);
-            cmd.arg("-c").arg(command);
+            self.append_shell_args(&mut cmd, command);
             cmd.kill_on_drop(true);
             return cmd;
         }
@@ -61,7 +71,7 @@ impl Sandbox {
             if !zerobox_exists() {
                 tracing::warn!("sandbox: zerobox not found, running unsandboxed");
                 let mut cmd = Command::new(&self.shell);
-                cmd.arg("-c").arg(command);
+                self.append_shell_args(&mut cmd, command);
                 cmd.kill_on_drop(true);
                 return cmd;
             }
@@ -70,7 +80,13 @@ impl Sandbox {
             cmd.arg(cwd.as_os_str());
             cmd.arg("--");
             cmd.arg(&self.shell);
-            cmd.arg("-c");
+            if self.shell == "cmd" || self.shell == "cmd.exe" {
+                cmd.arg("/C");
+            } else if self.shell == "powershell" || self.shell == "powershell.exe" || self.shell == "pwsh" {
+                cmd.arg("-Command");
+            } else {
+                cmd.arg("-c");
+            }
             cmd.arg(command);
             cmd.kill_on_drop(true);
             return cmd;
@@ -79,7 +95,7 @@ impl Sandbox {
         if !bwrap_exists() {
             tracing::warn!("sandbox: bwrap not found, running unsandboxed");
             let mut cmd = Command::new(&self.shell);
-            cmd.arg("-c").arg(command);
+            self.append_shell_args(&mut cmd, command);
             cmd.kill_on_drop(true);
             return cmd;
         }
@@ -110,10 +126,16 @@ impl Sandbox {
             "--unshare-uts",
             "--unshare-cgroup",
             "--die-with-parent",
-            &self.shell,
-            "-c",
-            command,
         ]);
+        cmd.arg(&self.shell);
+        if self.shell == "cmd" || self.shell == "cmd.exe" {
+            cmd.arg("/C");
+        } else if self.shell == "powershell" || self.shell == "powershell.exe" || self.shell == "pwsh" {
+            cmd.arg("-Command");
+        } else {
+            cmd.arg("-c");
+        }
+        cmd.arg(command);
         cmd.kill_on_drop(true);
         cmd
     }

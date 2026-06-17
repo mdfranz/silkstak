@@ -511,10 +511,16 @@ async fn main() -> anyhow::Result<()> {
         if msg.starts_with('!') {
             let cmd = msg.strip_prefix('!').map(|s| s.trim()).unwrap_or("");
             if !cmd.is_empty() {
-                let output = std::process::Command::new("bash")
-                    .arg("-c")
-                    .arg(cmd)
-                    .output()?;
+                let shell = cli.resolve_shell(&cfg);
+                let mut command = std::process::Command::new(&shell);
+                if shell == "cmd" || shell == "cmd.exe" {
+                    command.arg("/C").arg(cmd);
+                } else if shell == "powershell" || shell == "powershell.exe" || shell == "pwsh" {
+                    command.arg("-Command").arg(cmd);
+                } else {
+                    command.arg("-c").arg(cmd);
+                }
+                let output = command.output()?;
                 let mut result = String::new();
                 if !output.stdout.is_empty() {
                     result.push_str(&String::from_utf8_lossy(&output.stdout));
