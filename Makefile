@@ -43,10 +43,10 @@ dev:
 run:
 	cargo run -- $(ARGS)
 
-# Run with debug logging to zerostack.log in current directory
-# Suppresses noisy dependencies like h2, hyper, and ignore
+# Run with debug logging to zerostack.log (app) and zerostack.log.rig (framework)
+# App logs go to zerostack.log, rig framework logs go to zerostack.log.rig
 debug:
-	RUST_LOG=zerostack=debug,rig=debug,info RUST_LOG_FILE=1 cargo run -- $(ARGS)
+	RUST_LOG=zerostack=debug,rig=info RUST_LOG_FILE=1 cargo run -- $(ARGS)
 
 # Run tests
 test: fmt

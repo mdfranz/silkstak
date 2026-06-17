@@ -67,6 +67,9 @@ pub fn resolve_log_file_path(env_log_file: Option<String>, env_rust_log: bool) -
 }
 
 fn init_logging() {
+    use tracing_subscriber::layer::{Layer, SubscriberExt};
+    use tracing_subscriber::util::SubscriberInitExt;
+
     let filter = tracing_subscriber::EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("warn,rig=off"));
 
@@ -83,11 +86,39 @@ fn init_logging() {
                 .open(&path)
             {
                 Ok(file) => {
-                    tracing_subscriber::fmt()
+                    // Split rig logs into a separate file
+                    let rig_file = std::fs::OpenOptions::new()
+                        .create(true)
+                        .append(true)
+                        .open(format!("{}.rig", path))
+                        .ok();
+
+                    let main_filter =
+                        tracing_subscriber::EnvFilter::new("silkstak=debug,rig=off,info");
+                    let rig_filter = tracing_subscriber::EnvFilter::new("rig=info,off");
+
+                    let main_layer = tracing_subscriber::fmt::layer()
+                        .json()
                         .with_writer(file)
-                        .with_env_filter(filter)
-                        .init();
-                    tracing::info!("Logging initialized (file: {})", path);
+                        .with_filter(main_filter);
+
+                    let rig_layer = rig_file.map(|f| {
+                        tracing_subscriber::fmt::layer()
+                            .json()
+                            .with_writer(f)
+                            .with_filter(rig_filter)
+                    });
+
+                    if let Some(rig_l) = rig_layer {
+                        tracing_subscriber::registry()
+                            .with(main_layer)
+                            .with(rig_l)
+                            .init();
+                    } else {
+                        tracing_subscriber::registry().with(main_layer).init();
+                    }
+
+                    tracing::info!("Logging initialized (file: {}, rig: {}.rig)", path, path);
                 }
                 Err(err) => {
                     eprintln!(
@@ -95,6 +126,7 @@ fn init_logging() {
                         path, err
                     );
                     tracing_subscriber::fmt()
+                        .json()
                         .with_writer(std::io::stderr)
                         .with_env_filter(filter)
                         .init();
@@ -104,6 +136,7 @@ fn init_logging() {
         }
         None => {
             tracing_subscriber::fmt()
+                .json()
                 .with_writer(std::io::stderr)
                 .with_env_filter(filter)
                 .init();

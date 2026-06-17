@@ -2,11 +2,13 @@
 
 A minimal coding agent written in Rust, inspired by [pi](https://pi.dev/docs/latest/usage) and [opencode](https://opencode.ai/) and forked from [zerostack](https://github.com/gi-dellav/zerostack)
 
-All the credit goes to [Giuseppe Della Vedova](https://github.com/gi-dellav) and other [contributors](https://github.com/gi-dellav/zerostack/graphs/contributors)
+All the credit goes to [Giuseppe Della Vedova](https://github.com/gi-dellav) and other [contributors](https://github.com/gi-dellav/zerostack/graphs/contributor)
 
 ## Why did I fork
 
-I am using this as a project to learn Rust and coding agents. 
+I am using this as a project to learn Rust and coding agents.
+
+I initially just wanted to rip out the OpenRouter provider, but then tweaked the UI/UX.
 
 ## Zerostack Lore
 - https://rocketup.pages.dev/posts/how-zerostack-subagents-work/
@@ -34,7 +36,7 @@ I am using this as a project to learn Rust and coding agents.
 
 ## Performance
 
-This is one of the smallest and most performant coding agents on the market.
+This is one of the smallest and most performant coding agents on the market! 
 
 - Lines of code: ~17k LoC
 - Binary size: 26MB
@@ -69,8 +71,22 @@ apt install bubblewrap
 ## Quick start
 
 ```bash
-# Set your API key (OpenRouter is default)
-export OPENROUTER_API_KEY="[api_key]"
+# Set your API key for your preferred provider
+
+# OpenRouter (default)
+export OPENROUTER_API_KEY="your-key-here"
+
+# Or use Anthropic
+export ANTHROPIC_API_KEY="your-key-here"
+
+# Or OpenAI
+export OPENAI_API_KEY="your-key-here"
+
+# Or Gemini
+export GEMINI_API_KEY="your-key-here"
+
+# Or Ollama (no key needed)
+export OLLAMA_BASE_URL="http://localhost:11434"
 
 # Interactive session (default prompt: code)
 zerostack
@@ -79,13 +95,21 @@ zerostack
 zerostack --no-color
 
 # One-shot mode
-zerostack -p "Explain this project"
+silkstack -p "Explain this project"
 
 # Continue last session
-zerostack -c
+silkstack -c
 
 # Explicit provider/model
-zerostack --provider openrouter --model deepseek/deepseek-v4-flash
+silkstak --provider openrouter --model deepseek/deepseek-v4-flash
+silkstak --provider anthropic --model claude-opus-4-6
+silkstak --provider openai --model gpt-4o
+
+# Enable debug logging
+RUST_LOG=debug zerostack
+
+# Or use the debug make target (writes to zerostack.log)
+make debug
 ```
 
 ## Configuration
@@ -93,11 +117,11 @@ zerostack --provider openrouter --model deepseek/deepseek-v4-flash
 See [docs/CONFIG.md](docs/CONFIG.md) for config file location, accepted keys, provider
 aliases, permission rules, and MCP server configuration.
 
-You can run `/prompt autoconfig` in order to use a specialized agent that allows to navigate the documentation and customize your zerostack setup.
+You can run `/prompt autoconfig` in order to use a specialized agent that allows to navigate the documentation and customize your silkstak setup.
 
 ## Prompts system
 
-_zerostack_ includes a set of built-in system prompts that change the agent's behavior and tone.
+_silkstak_ includes a set of built-in system prompts that change the agent's behavior and tone.
 The idea is to build a complete suite of prompts that can fully substitute skills like [superpower](https://github.com/obra/superpowers) or the [Claude's official skills](https://github.com/anthropics/claude-plugins-official/tree/main).
 You can switch between different prompts or list all registered prompts using `/prompt`.
 
