@@ -506,7 +506,6 @@ pub fn handle_models_key(
             true
         }
         KeyCode::Up => {
-
             picker.select_prev();
             true
         }

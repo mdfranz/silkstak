@@ -6855,6 +6855,40 @@ dependencies = [
 ]
 
 [[package]]
+name = "silkstak"
+version = "1.5.0-rc1"
+dependencies = [
+ "agent-client-protocol",
+ "anyhow",
+ "blocking",
+ "chrono",
+ "clap",
+ "compact_str",
+ "crossterm",
+ "dirs",
+ "futures",
+ "http 1.4.0",
+ "ignore",
+ "include_dir",
+ "mimalloc",
+ "pulldown-cmark",
+ "regex",
+ "reqwest 0.13.3",
+ "rig",
+ "rmcp",
+ "serde",
+ "serde_json",
+ "smallvec",
+ "thiserror",
+ "tokio",
+ "toml",
+ "tracing",
+ "tracing-subscriber",
+ "unicode-width",
+ "uuid",
+]
+
+[[package]]
 name = "simd-adler32"
 version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8582,40 +8616,6 @@ name = "zeroize"
 version = "1.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b97154e67e32c85465826e8bcc1c59429aaaf107c1e4a9e53c8d8ccd5eff88d0"
-
-[[package]]
-name = "zerostack"
-version = "1.5.0-rc1"
-dependencies = [
- "agent-client-protocol",
- "anyhow",
- "blocking",
- "chrono",
- "clap",
- "compact_str",
- "crossterm",
- "dirs",
- "futures",
- "http 1.4.0",
- "ignore",
- "include_dir",
- "mimalloc",
- "pulldown-cmark",
- "regex",
- "reqwest 0.13.3",
- "rig",
- "rmcp",
- "serde",
- "serde_json",
- "smallvec",
- "thiserror",
- "tokio",
- "toml",
- "tracing",
- "tracing-subscriber",
- "unicode-width",
- "uuid",
-]
 
 [[package]]
 name = "zerotrie"

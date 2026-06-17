@@ -102,7 +102,11 @@ pub(crate) fn draw_picker_list(
     for r in top_row..(rows.saturating_sub(3)) {
         stdout.execute(MoveTo(0, r))?;
         write!(stdout, "{}", ResetColor)?;
-        write!(stdout, "{}", Clear(crossterm::terminal::ClearType::CurrentLine))?;
+        write!(
+            stdout,
+            "{}",
+            Clear(crossterm::terminal::ClearType::CurrentLine)
+        )?;
     }
 
     for (i, item) in matches
@@ -168,7 +172,11 @@ pub(crate) fn draw_picker_list(
                 }
             }
         }
-        write!(stdout, "{}", Clear(crossterm::terminal::ClearType::UntilNewLine))?;
+        write!(
+            stdout,
+            "{}",
+            Clear(crossterm::terminal::ClearType::UntilNewLine)
+        )?;
         write!(stdout, "{}", ResetColor)?;
     }
     stdout.flush()?;

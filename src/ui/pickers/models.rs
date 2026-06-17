@@ -123,11 +123,7 @@ impl ModelsPicker {
                 .filter_map(|n| fuzzy_score(n, &self.query).map(|s| (s, n)))
                 .collect();
             scored.sort_by_key(|b| std::cmp::Reverse(b.0));
-            self.matches = scored
-                .iter()
-                .take(50)
-                .map(|(_, n)| (*n).clone())
-                .collect();
+            self.matches = scored.iter().take(50).map(|(_, n)| (*n).clone()).collect();
             self.match_descriptions = vec![None; self.matches.len()];
         }
         self.selected = 0;

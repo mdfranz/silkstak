@@ -1,12 +1,12 @@
 [package]
-name = "zerostack"
+name = "silkstak"
 version = "1.5.0-rc1"
 edition = "2024"
 authors = ["Giuseppe Della Vedova"]
 description = "Minimalistic coding agent written in Rust, optimized for memory footprint and performance"
 license = "GPL-3.0-only"
-homepage = "https://github.com/gi-dellav/zerostack"
-repository = "https://github.com/gi-dellav/zerostack"
+homepage = "https://github.com/gi-dellav/silkstak"
+repository = "https://github.com/gi-dellav/silkstak"
 readme = "README.md"
 keywords = ["ai", "cli", "dev"]
 

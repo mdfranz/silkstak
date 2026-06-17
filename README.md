@@ -1,17 +1,22 @@
-![banner](https://github.com/gi-dellav/zerostack/blob/main/assets/banner.png?raw=true)
+# Silkstak: A smooth remix of zerostack
 
----
+A minimal coding agent written in Rust, inspired by [pi](https://pi.dev/docs/latest/usage) and [opencode](https://opencode.ai/) and forked from [zerostack](https://github.com/gi-dellav/zerostack)
 
-# zerostack
-Minimal coding agent written in Rust, inspired by [pi](https://pi.dev/docs/latest/usage) and [opencode](https://opencode.ai/).
+All the credit goes to [Giuseppe Della Vedova](https://github.com/gi-dellav) and other [contributors](https://github.com/gi-dellav/zerostack/graphs/contributors)
 
-*blogposts:* [what we built in 2 weeks](https://rocketup.pages.dev/posts/what_we_built_in_2_weeks/) [memory design](https://rocketup.pages.dev/posts/how-zerostack-memory-works/) [subagents design](https://rocketup.pages.dev/posts/how-zerostack-subagents-work/) [xavier's memory analysis](https://xavierforge.dev/en/posts/zerostack-memory-design/)
+## Why did I fork
 
-<a href="https://www.producthunt.com/products/zerostack-coding-agent/reviews/new?utm_source=badge-product_review&utm_medium=badge&utm_source=badge-zerostack&#0045;coding&#0045;agent" target="_blank"><img src="https://api.producthunt.com/widgets/embed-image/v1/product_review.svg?product_id=1236867&theme=light" alt="Zerostack&#0032;Coding&#0032;Agent - A&#0032;minimal&#0032;coding&#0032;agent&#0044;&#0032;with&#0032;a&#0032;bundle&#0032;of&#0032;innovative&#0032;features | Product Hunt" style="width: 250px; height: 54px;" width="250" height="54" /></a>
+I am using this as a project to learn Rust and coding agents. 
 
-## Features
+## Zerostack Lore
+- https://rocketup.pages.dev/posts/how-zerostack-subagents-work/
+- https://xavierforge.dev/en/posts/zerostack-memory-design/
+- https://rocketup.pages.dev/posts/what_we_built_in_2_weeks/
 
-- **Multi-provider**: OpenRouter, OpenAI, Anthropic, Gemini, Ollama, plus custom providers
+
+## Core Features
+
+- **Multi-provider**: OpenAI, Anthropic, Gemini, Ollama, plus custom providers
 - **Standard tools**: all of the standard tools exposed to coding agents, as described by the opencode documentation.
 - **Permission system**: five configurable modes with per-tool patterns, session allowlists, and configurable mode-to-rule application policies
 - **Session management**: save/load/resume sessions, auto-compaction to stay within context windows
@@ -24,13 +29,12 @@ Minimal coding agent written in Rust, inspired by [pi](https://pi.dev/docs/lates
 - **ACP support** (gated): Agent Communication Protocol server — lets editors (Zed, etc.) connect to zerostack as an ACP agent
 - **Persistent memory** (gated): plain-Markdown memory across sessions: a global MEMORY.md plus per-project daily logs, scratchpad, and notes, injected into the system prompt each session
 - **Subagents**: Parallel and fast, used for exploring the codebase
-- **ARCHITECTURE.md**: Our own companion file for AGENTS.md, it allows to offer a shared core knowledge for all agents working on the same codebase
 
 **NOTE**: Windows support is not tested is any way, but feel free to try and open an issue if you encounter any bugs!
 
 ## Performance
 
-_zerostack_ is one of the smallest and most performant coding agents on the market.
+This is one of the smallest and most performant coding agents on the market.
 
 - Lines of code: ~17k LoC
 - Binary size: 26MB
@@ -61,10 +65,6 @@ system from accidental or malicious damage:
 # Debian/Ubuntu
 apt install bubblewrap
 
-# Fedora
-dnf install bubblewrap
-
-There is also support for zerobox as an alternative sandbox backend.
 
 ## Quick start
 

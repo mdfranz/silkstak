@@ -31,7 +31,11 @@ fn test_models_picker_tab_toggles_to_provider_group() {
 #[test]
 fn test_models_picker_starts_on_provider_when_quick_empty() {
     let mut picker = ModelsPicker::new();
-    picker.set_groups(Vec::new(), vec!["claude-opus-4-7".to_string()], "anthropic".to_string());
+    picker.set_groups(
+        Vec::new(),
+        vec!["claude-opus-4-7".to_string()],
+        "anthropic".to_string(),
+    );
     picker.activate();
     assert_eq!(picker.matches, vec!["claude-opus-4-7".to_string()]);
 }
