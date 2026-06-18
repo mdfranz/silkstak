@@ -285,7 +285,13 @@ impl Cli {
         self.shell
             .clone()
             .or_else(|| cfg.shell.clone())
-            .unwrap_or_else(|| "bash".to_string())
+            .unwrap_or_else(|| {
+                if cfg!(windows) {
+                    "powershell".to_string()
+                } else {
+                    "bash".to_string()
+                }
+            })
     }
 
     pub fn resolve_edit_system(&self, cfg: &config::Config) -> EditSystem {

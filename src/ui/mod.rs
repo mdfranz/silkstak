@@ -1287,15 +1287,29 @@ pub async fn run_interactive(
                                     renderer.write_line("", Color::White)?;
 
                                     let cmd_owned = cmd.to_string();
+                                    let shell = cli.resolve_shell(cfg);
+                                    tracing::info!(command = %cmd, shell = %shell, "executing manual shell command");
                                     let output = tokio::task::spawn_blocking(move || {
-                                        std::process::Command::new("bash")
-                                            .arg("-c")
-                                            .arg(&cmd_owned)
-                                            .output()
+                                        let mut command = std::process::Command::new(&shell);
+                                        if shell == "cmd" || shell == "cmd.exe" {
+                                            command.arg("/C").arg(&cmd_owned);
+                                        } else if shell == "powershell" || shell == "powershell.exe" || shell == "pwsh" {
+                                            command.arg("-Command").arg(&cmd_owned);
+                                        } else {
+                                            command.arg("-c").arg(&cmd_owned);
+                                        }
+                                        command.output()
                                     })
                                     .await
                                     .map_err(|e| anyhow::anyhow!("spawn error: {}", e))?
                                     .map_err(|e| anyhow::anyhow!("command error: {}", e))?;
+
+                                    tracing::info!(
+                                        command = %cmd,
+                                        exit_code = output.status.code().unwrap_or(-1),
+                                        success = output.status.success(),
+                                        "manual shell command completed"
+                                    );
 
                                     let mut result = String::new();
                                     if !output.stdout.is_empty() {
