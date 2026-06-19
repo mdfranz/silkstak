@@ -69,7 +69,7 @@ blocking = { version = "1", optional = true }
 mimalloc = { version = "0.1", default-features = false }
 
 [target.'cfg(target_os = "openbsd")'.dependencies]
-reqwest = { version = "0.13", default-features = false, features = ["native-tls"] }
+reqwest = { version = "0.13", default-features = false, features = ["rustls"] }
 
 
 [profile.dev]
@@ -80,7 +80,7 @@ incremental = true
 
 [profile.release]
 opt-level = "z"
-lto = "thin"
+lto = false
 codegen-units = 1
 strip = true
 debug = false

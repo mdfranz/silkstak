@@ -32,7 +32,7 @@ I initially just wanted to rip out the OpenRouter provider, but then tweaked the
 - **Persistent memory** (gated): plain-Markdown memory across sessions: a global MEMORY.md plus per-project daily logs, scratchpad, and notes, injected into the system prompt each session
 - **Subagents**: Parallel and fast, used for exploring the codebase
 
-**NOTE**: Windows support is not tested is any way, but feel free to try and open an issue if you encounter any bugs!
+**NOTE**: Limited testing has been done on OpenBSD and Windows, but feel free to try them out and open an issue if you encounter any bugs!
 
 ## Performance
 
