@@ -10,6 +10,8 @@ I am using this as a project to learn Rust and coding agents.
 
 I initially just wanted to rip out the OpenRouter provider, but then tweaked the UI/UX.
 
+*OS Support* - Windows 11 has been tested and [afranz29](https://github.com/afranz29/) added powershll support  and I am doing more thorough validatin on OpenBSD, you do need to install Bash.
+
 ## Zerostack Lore
 - https://rocketup.pages.dev/posts/how-zerostack-subagents-work/
 - https://xavierforge.dev/en/posts/zerostack-memory-design/
